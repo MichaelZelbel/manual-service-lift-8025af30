@@ -136,6 +136,13 @@ const MDSImport = () => {
         rows = parseWorksheetData(jsonData as any[][]);
       }
 
+      console.log('Preview rows parsed:', rows);
+
+      if (rows.length === 0) {
+        toast.error("No valid data found. Please ensure the file has columns: Manual Service ID, Process Step ID, and other required fields.");
+        return;
+      }
+
       setParsedData(rows.slice(0, 10));
       toast.success(`Preview: First ${Math.min(rows.length, 10)} rows loaded`);
     } catch (error) {
@@ -145,6 +152,9 @@ const MDSImport = () => {
   };
 
   const parseCSV = (text: string): MDSRow[] => {
+    // Remove BOM if present
+    text = text.replace(/^\ufeff/, '');
+    
     const lines = text.split('\n').filter(line => line.trim());
     
     if (lines.length < 2) {
@@ -188,30 +198,88 @@ const MDSImport = () => {
 
   const mapRowFromHeaders = (headers: string[], values: string[]): MDSRow => {
     const row: any = {};
+    let sopUrl = '';
+    let sopType = '';
     
     headers.forEach((header, idx) => {
-      if (header.includes('service') && header.includes('external')) {
-        row.service_external_id = values[idx];
-      } else if (header.includes('service') && header.includes('name')) {
-        row.service_name = values[idx];
-      } else if (header.includes('performing') && header.includes('team')) {
-        row.performing_team = values[idx];
-      } else if (header.includes('performer') && header.includes('org')) {
-        row.performer_org = values[idx];
+      const value = values[idx];
+      
+      // Manual Service ID or Service External ID
+      if (header.includes('manual') && header.includes('service') && header.includes('id')) {
+        row.service_external_id = value;
+      } else if (header.includes('service') && header.includes('external')) {
+        row.service_external_id = value;
+      }
+      
+      // Manual Service Name or Service Name
+      else if (header.includes('manual') && header.includes('service') && header.includes('name')) {
+        row.service_name = value;
+      } else if (header.includes('service') && header.includes('name') && !header.includes('performer')) {
+        row.service_name = value;
+      }
+      
+      // Process Step ID or Step External ID
+      else if (header.includes('process') && header.includes('step') && header.includes('id')) {
+        row.step_external_id = value;
       } else if (header.includes('step') && header.includes('external')) {
-        row.step_external_id = values[idx];
+        row.step_external_id = value;
+      }
+      
+      // Process Step Name or Step Name
+      else if (header.includes('process') && header.includes('step') && header.includes('name')) {
+        row.step_name = value;
       } else if (header.includes('step') && header.includes('name')) {
-        row.step_name = values[idx];
-      } else if (header === 'type') {
-        row.type = values[idx];
-      } else if (header.includes('candidate') && header.includes('group')) {
-        row.candidate_group = values[idx];
-      } else if (header.includes('sop') && header.includes('url')) {
-        row.sop_urls = values[idx];
+        row.step_name = value;
+      }
+      
+      // Performing Team
+      else if (header.includes('performing') && header.includes('team')) {
+        row.performing_team = value;
+      }
+      
+      // Service Performer Organisation or Performer Org
+      else if (header.includes('service') && header.includes('performer') && header.includes('org')) {
+        row.performer_org = value;
+      } else if (header.includes('performer') && header.includes('org')) {
+        row.performer_org = value;
+      }
+      
+      // Type
+      else if (header === 'type' && !header.includes('sop') && !header.includes('decision')) {
+        row.type = value;
+      }
+      
+      // Candidate Group
+      else if (header.includes('candidate') && header.includes('group')) {
+        row.candidate_group = value;
+      }
+      
+      // URL to SOP/Decision Sheet
+      else if (header.includes('url') && (header.includes('sop') || header.includes('decision'))) {
+        sopUrl = value;
+      }
+      
+      // Type SOP/Decision Sheet
+      else if (header.includes('type') && (header.includes('sop') || header.includes('decision'))) {
+        sopType = value;
+      }
+      
+      // Old format: separate SOP and Decision Sheet URLs
+      else if (header.includes('sop') && header.includes('url') && !header.includes('decision')) {
+        row.sop_urls = value;
       } else if (header.includes('decision') && header.includes('url')) {
-        row.decision_sheet_urls = values[idx];
+        row.decision_sheet_urls = value;
       }
     });
+
+    // Handle combined URL/Type format from MDS export
+    if (sopUrl && sopType) {
+      if (sopType.toLowerCase().includes('sop')) {
+        row.sop_urls = sopUrl;
+      } else if (sopType.toLowerCase().includes('decision')) {
+        row.decision_sheet_urls = sopUrl;
+      }
+    }
 
     return row;
   };
@@ -240,8 +308,23 @@ const MDSImport = () => {
         allRows = parseWorksheetData(jsonData as any[][]);
       }
 
+      console.log('Parsed rows:', allRows);
+
       if (allRows.length === 0) {
-        toast.error("No valid data found in file");
+        toast.error("No valid data found in file. Please ensure columns include: Manual Service ID, Process Step ID, and other required fields.");
+        return;
+      }
+
+      // Validate required fields
+      const invalidRows = allRows.filter(row => 
+        !row.service_external_id || !row.service_name || 
+        !row.step_external_id || !row.step_name ||
+        !row.performing_team || !row.performer_org || !row.type
+      );
+
+      if (invalidRows.length > 0) {
+        console.error('Invalid rows found:', invalidRows);
+        toast.error(`Found ${invalidRows.length} rows with missing required fields. Check console for details.`);
         return;
       }
 

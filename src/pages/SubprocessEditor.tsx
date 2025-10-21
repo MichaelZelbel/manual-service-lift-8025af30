@@ -9,6 +9,7 @@ import { Card } from "@/components/ui/card";
 import { ArrowLeft, RotateCcw, Save, GripVertical, Plus, Trash2, Download, BarChart3 } from "lucide-react";
 import { toast } from "sonner";
 import { ExportModal } from "@/components/ExportModal";
+import { BpmnGraphicalEditor } from "@/components/BpmnGraphicalEditor";
 import {
   DndContext,
   closestCenter,
@@ -95,7 +96,7 @@ function SortableStep({ step, onShowConnections, onDelete }: SortableStepProps) 
     <div
       ref={setNodeRef}
       style={style}
-      className="bg-white p-4 rounded-lg border border-border hover:border-primary transition-all duration-200"
+      className="bg-card p-4 rounded-lg border border-border hover:border-primary transition-all duration-200"
     >
       <div className="flex items-start gap-4">
         {/* Drag Handle */}
@@ -104,7 +105,7 @@ function SortableStep({ step, onShowConnections, onDelete }: SortableStepProps) 
           {...listeners}
           className="flex-shrink-0 pt-1 cursor-grab active:cursor-grabbing hover:opacity-70 transition-opacity"
         >
-          <GripVertical className="h-5 w-5 text-[#A0A0A0]" />
+          <GripVertical className="h-5 w-5 text-muted-foreground" />
         </div>
 
         {/* Content */}
@@ -391,7 +392,7 @@ export default function SubprocessEditor() {
   return (
     <div className="min-h-screen bg-background animate-fade-in">
       {/* Top Bar */}
-      <div className="bg-white border-b border-border">
+      <div className="bg-card border-b border-border">
         <div className="container mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
@@ -485,19 +486,13 @@ export default function SubprocessEditor() {
           </TabsContent>
 
           <TabsContent value="graphical">
-            <Card className="p-6">
-              <div className="bg-muted/30 rounded-lg border border-border p-12 text-center">
-                <h3 className="text-lg font-semibold text-foreground mb-2">
-                  BPMN Graphical Editor
-                </h3>
-                <p className="text-muted-foreground">
-                  Interactive subprocess BPMN diagram editor will be integrated here.
-                </p>
-                <p className="text-sm text-muted-foreground mt-4">
-                  Features: Add/remove nodes, edit connections, toolbox for gateways and tasks
-                </p>
-              </div>
-            </Card>
+            {subprocess && (
+              <BpmnGraphicalEditor
+                entityId={subprocess.id}
+                entityType="subprocess"
+                onSave={fetchSubprocessAndSteps}
+              />
+            )}
           </TabsContent>
         </Tabs>
       </div>

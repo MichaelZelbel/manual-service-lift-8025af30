@@ -214,6 +214,7 @@ export type Database = {
       manual_services: {
         Row: {
           created_at: string
+          edited_bpmn_xml: string | null
           id: string
           last_analysis: string | null
           last_bpmn_export: string | null
@@ -226,6 +227,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          edited_bpmn_xml?: string | null
           id?: string
           last_analysis?: string | null
           last_bpmn_export?: string | null
@@ -238,6 +240,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          edited_bpmn_xml?: string | null
           id?: string
           last_analysis?: string | null
           last_bpmn_export?: string | null
@@ -348,6 +351,7 @@ export type Database = {
       subprocesses: {
         Row: {
           created_at: string
+          edited_bpmn_xml: string | null
           id: string
           name: string
           original_bpmn_xml: string | null
@@ -356,6 +360,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          edited_bpmn_xml?: string | null
           id?: string
           name: string
           original_bpmn_xml?: string | null
@@ -364,6 +369,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          edited_bpmn_xml?: string | null
           id?: string
           name?: string
           original_bpmn_xml?: string | null

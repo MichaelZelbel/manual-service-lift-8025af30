@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/card";
 import { ArrowLeft, RotateCcw, Save, GripVertical, Download, BarChart3 } from "lucide-react";
 import { toast } from "sonner";
 import { ExportModal } from "@/components/ExportModal";
+import { BpmnGraphicalEditor } from "@/components/BpmnGraphicalEditor";
 
 import {
   DndContext,
@@ -403,19 +404,13 @@ export default function ProcessEditor() {
           </TabsContent>
 
           <TabsContent value="graphical">
-            <Card className="p-6">
-              <div className="bg-muted/30 rounded-lg border border-border p-12 text-center">
-                <h3 className="text-lg font-semibold text-foreground mb-2">
-                  BPMN Graphical Editor
-                </h3>
-                <p className="text-muted-foreground">
-                  Interactive BPMN diagram editor will be integrated here.
-                </p>
-                <p className="text-sm text-muted-foreground mt-4">
-                  Features: Add/remove gateways, edit connections, zoom & pan controls
-                </p>
-              </div>
-            </Card>
+            {service && (
+              <BpmnGraphicalEditor
+                entityId={service.id}
+                entityType="service"
+                onSave={fetchServiceAndSteps}
+              />
+            )}
           </TabsContent>
         </Tabs>
       </div>

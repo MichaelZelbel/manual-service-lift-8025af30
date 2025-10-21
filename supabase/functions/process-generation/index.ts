@@ -36,11 +36,47 @@ const FALLBACK_MAIN_TEMPLATE = (serviceName: string, serviceId: string) => `<?xm
 
 const SYSTEM_PROMPT = `You are a BPMN 2.0 generator for Camunda 8.
 Return **only** well-formed BPMN 2.0 XML when asked. No markdown fences, no commentary.
-IDs must be unique and concise (e.g., Task_1, Gateway_2).
-bpmn:userTask for human work; bpmn:serviceTask for system work.
-If a user task has a candidate_group, set camunda:candidateGroups="…".
-When insufficient information exists, return the minimal fallback diagram.
-Output must always be a single <bpmn:definitions>…</bpmn:definitions> document.`;
+
+CRITICAL REQUIREMENTS:
+1. Use Camunda 8 namespaces:
+   - xmlns:zeebe="http://camunda.org/schema/zeebe/1.0"
+   - xmlns:modeler="http://camunda.org/schema/modeler/1.0"
+   - Do NOT use xmlns:camunda (that's Camunda 7)
+
+2. ALWAYS include complete <bpmndi:BPMNDiagram> section with:
+   - <bpmndi:BPMNPlane> containing the process
+   - <bpmndi:BPMNShape> for EVERY task, gateway, and event
+   - <bpmndi:BPMNEdge> for EVERY sequence flow
+   - Proper dc:Bounds with x, y, width, height coordinates
+   - Layout elements horizontally with ~150-200px spacing
+
+3. Element specifications:
+   - IDs must be unique and concise (e.g., Task_1, Gateway_2, Flow_1)
+   - Use bpmn:userTask for human work
+   - Use bpmn:serviceTask for system/automated work
+   - Set isExecutable="true" on process
+
+4. For Camunda 8 task assignment, use zeebe:taskDefinition instead of camunda:candidateGroups:
+   <bpmn:userTask id="Task_1" name="Task Name">
+     <bpmn:extensionElements>
+       <zeebe:taskDefinition type="user-task" />
+       <zeebe:taskHeaders>
+         <zeebe:header key="candidateGroups" value="GROUP_NAME" />
+       </zeebe:taskHeaders>
+     </bpmn:extensionElements>
+   </bpmn:userTask>
+
+5. Standard namespace declaration:
+   xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+   xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+   xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+   xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+   xmlns:zeebe="http://camunda.org/schema/zeebe/1.0"
+   xmlns:modeler="http://camunda.org/schema/modeler/1.0"
+
+6. When insufficient information exists, return a minimal but complete diagram with all required sections.
+
+Output must be a complete, valid BPMN 2.0 XML document that can be imported directly into Camunda 8.`;
 
 async function callClaude(prompt: string, apiKey: string, retryCount = 0): Promise<string> {
   try {
@@ -52,7 +88,7 @@ async function callClaude(prompt: string, apiKey: string, retryCount = 0): Promi
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: 'claude-3-5-sonnet-20241022',
+        model: 'claude-sonnet-4-5',
         max_tokens: 6000,
         temperature: 0.2,
         system: SYSTEM_PROMPT,
@@ -210,11 +246,30 @@ Candidate Group: ${step.candidate_group || 'None'}
 ${pdfInfo}
 
 Instructions:
+- Use process id="Process_Sub_${step.step_external_id}" name="${step.name}" isExecutable="true"
 - Default to bpmn:userTask unless the text clearly implies automation (then bpmn:serviceTask)
-- If candidate_group is present, add camunda:candidateGroups="${step.candidate_group || ''}" to all user tasks
-- Use process id="Process_Sub_${step.step_external_id}" name="${step.name}"
-- Create 3-9 logical tasks based on typical steps for this type of activity
-- Return only BPMN XML, no other text`;
+- If candidate_group is present, add Camunda 8 task assignment using zeebe:taskHeaders:
+  <bpmn:extensionElements>
+    <zeebe:taskDefinition type="user-task" />
+    <zeebe:taskHeaders>
+      <zeebe:header key="candidateGroups" value="${step.candidate_group || ''}" />
+    </zeebe:taskHeaders>
+  </bpmn:extensionElements>
+- Create 3-9 logical tasks based on the content
+- Include ONE bpmn:startEvent and ONE bpmn:endEvent
+- Connect all elements with bpmn:sequenceFlow
+
+CRITICAL: Include complete <bpmndi:BPMNDiagram> section:
+- Layout tasks horizontally starting at x=150, y=80
+- Space tasks 180px apart horizontally (x positions: 150, 330, 510, 690, etc.)
+- Use standard dimensions: tasks (100x80), events (36x36), gateways (50x50)
+- StartEvent at x=152, y=102
+- Tasks at y=80 with height=80
+- EndEvent after last task
+- Include BPMNShape for every element and BPMNEdge for every flow
+
+Use proper Camunda 8 namespaces (zeebe, not camunda).
+Return only valid BPMN 2.0 XML, no other text.`;
 
       try {
         const xmlResponse = await callClaude(subprocessPrompt, ANTHROPIC_API_KEY);
@@ -251,13 +306,28 @@ Steps (in order):
 ${stepsInfo.map((step: any, idx: number) => `${idx + 1}. ${step.name} (${step.type}${step.candidate_group ? ', group: ' + step.candidate_group : ''})`).join('\n')}
 
 Instructions:
-- Use process id="Process_Main_${service_external_id}" name="${serviceData.name}"
-- For each step, create a bpmn:callActivity with calledElement="Process_Sub_{{step_external_id}}"
-- Order steps logically; insert gateways if branching is implied by names
-- Map types: regular/fixed/unknown → bpmn:userTask, data collection → bpmn:serviceTask
-- For user tasks in main process, if candidate_group exists, set camunda:candidateGroups
-- If no branching is clear, connect sequentially
-- Return only BPMN XML, no other text`;
+- Use process id="Process_Main_${service_external_id}" name="${serviceData.name}" isExecutable="true"
+- For each step, create a bpmn:callActivity with:
+  <bpmn:callActivity id="CallActivity_[index]" name="[step name]">
+    <bpmn:extensionElements>
+      <zeebe:calledElement processId="Process_Sub_[step_external_id]" propagateAllChildVariables="false" />
+    </bpmn:extensionElements>
+  </bpmn:callActivity>
+- If branching is implied by step names, add exclusive gateways
+- Otherwise connect steps sequentially
+- Include ONE bpmn:startEvent at the beginning
+- Include ONE bpmn:endEvent at the end
+
+CRITICAL: Include complete <bpmndi:BPMNDiagram> section:
+- Layout callActivities horizontally starting at x=150, y=80
+- Space elements 200px apart (x positions: 150, 350, 550, 750, etc.)
+- Use dimensions: callActivities (100x80), events (36x36), gateways (50x50)
+- StartEvent at x=152, y=102
+- CallActivities at y=80 with height=80
+- Include BPMNShape for every element and BPMNEdge for every sequence flow with proper waypoints
+
+Use proper Camunda 8 namespaces (zeebe, not camunda).
+Return only valid BPMN 2.0 XML, no other text.`;
 
     let main_bpmn_xml: string;
     try {

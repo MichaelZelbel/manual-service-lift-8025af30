@@ -220,6 +220,7 @@ export type Database = {
           last_edited: string
           last_form_export: string | null
           name: string
+          original_bpmn_xml: string | null
           performer_org: string
           performing_team: string
         }
@@ -231,6 +232,7 @@ export type Database = {
           last_edited?: string
           last_form_export?: string | null
           name: string
+          original_bpmn_xml?: string | null
           performer_org: string
           performing_team: string
         }
@@ -242,6 +244,7 @@ export type Database = {
           last_edited?: string
           last_form_export?: string | null
           name?: string
+          original_bpmn_xml?: string | null
           performer_org?: string
           performing_team?: string
         }
@@ -347,6 +350,7 @@ export type Database = {
           created_at: string
           id: string
           name: string
+          original_bpmn_xml: string | null
           service_id: string
           updated_at: string
         }
@@ -354,6 +358,7 @@ export type Database = {
           created_at?: string
           id?: string
           name: string
+          original_bpmn_xml?: string | null
           service_id: string
           updated_at?: string
         }
@@ -361,6 +366,7 @@ export type Database = {
           created_at?: string
           id?: string
           name?: string
+          original_bpmn_xml?: string | null
           service_id?: string
           updated_at?: string
         }

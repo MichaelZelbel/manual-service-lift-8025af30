@@ -1,3 +1,4 @@
+import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.76.1';
 
 const corsHeaders = {
@@ -21,7 +22,7 @@ Deno.serve(async (req) => {
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const lovableApiKey = Deno.env.get('LOVABLE_API_KEY')!;
+    const anthropicApiKey = Deno.env.get('ANTHROPIC_API_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const { service_external_id } = await req.json();
@@ -83,41 +84,45 @@ Deno.serve(async (req) => {
       throw new Error('Service not found');
     }
 
-    // Build prompt for Claude
+    // Build prompt for Claude with PDF links
     const stepsDescription = mdsRows.map((row: any, idx: number) => {
       const taskType = TYPE_MAPPING[row.type.toLowerCase()] || 'userTask';
+      const pdfUrl = row.sop_urls || row.decision_sheet_urls || '';
       return `
 Step ${idx + 1}:
 - ID: ${row.step_external_id}
 - Name: ${row.step_name}
 - Type: ${taskType}
 - Candidate Group: ${row.candidate_group || 'N/A'}
-- SOP URLs: ${row.sop_urls || 'None'}
-- Decision Sheet URLs: ${row.decision_sheet_urls || 'None'}
+
+Please analyze the process described in the following PDF and turn it into a BPMN 2.0 process diagram that can be imported into Camunda 8.
+Focus only on Major steps and turn all of them into user tasks. End up with anything between 3 and 20 tasks in the diagram, whatever describes the steps.
+Use gates to branch out from one task to multiple other tasks where appropriate.
+
+PDF: ${pdfUrl || 'No PDF provided'}
 `;
-    }).join('\n');
+    }).join('\n\n');
 
-    const prompt = `You are a BPMN 2.0 process generation expert. 
-
-Given the following manual service steps from an MDS export, produce:
+    const prompt = `Given the following manual service steps from an MDS export, produce:
 1. A main BPMN process XML with sequential user tasks (one per step)
-2. For each step, a subprocess BPMN XML with 5-9 detailed actions
+2. For each step, a subprocess BPMN XML with 5-9 detailed actions based on the PDF content
 
 Service: ${service.name}
 Team: ${service.performing_team}
 Organization: ${service.performer_org}
 
-Steps:
+Steps with PDF links:
 ${stepsDescription}
 
 Requirements:
-- Use BPMN 2.0 XML format
+- Use BPMN 2.0 XML format compatible with Camunda 8
 - Each main task should reference the step's candidate group as: <bpmn:userTask camunda:candidateGroups="{candidateGroup}">
 - Keep subprocess actions human-readable and actionable
-- Include gateways only where logically needed
+- Include gateways only where logically needed based on the PDF content
 - Use proper BPMN IDs and naming conventions
+- Each subprocess should have 3-20 user tasks based on the PDF
 
-Output format:
+Output format (JSON):
 {
   "main_bpmn": "<bpmn:definitions>...</bpmn:definitions>",
   "subprocesses": [
@@ -132,39 +137,50 @@ Output format:
   ]
 }`;
 
-    console.log('Calling AI for process generation...');
+    console.log('Calling Claude Sonnet 4.5 for process generation...');
 
-    // Call Claude via Lovable AI
-    const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+    // Call Claude Sonnet 4.5 directly
+    const aiResponse = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${lovableApiKey}`,
+        'x-api-key': anthropicApiKey,
+        'anthropic-version': '2023-06-01',
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
+        model: 'claude-sonnet-4-5',
+        max_tokens: 16384,
+        system: 'You are a BPMN 2.0 process generation expert. Always return valid JSON in the exact format requested.',
         messages: [
-          {
-            role: 'system',
-            content: 'You are a BPMN process generation expert. Always return valid JSON.'
-          },
           {
             role: 'user',
             content: prompt
           }
         ],
-        response_format: { type: 'json_object' }
       }),
     });
 
     if (!aiResponse.ok) {
       const errorText = await aiResponse.text();
-      throw new Error(`AI generation failed: ${aiResponse.status} - ${errorText}`);
+      throw new Error(`Claude generation failed: ${aiResponse.status} - ${errorText}`);
     }
 
     const aiData = await aiResponse.json();
-    const generatedContent = aiData.choices[0].message.content;
-    const processData = JSON.parse(generatedContent);
+    console.log('Claude response received, parsing content...');
+    
+    const generatedContent = aiData.content?.[0]?.text;
+    if (!generatedContent) {
+      throw new Error('No content generated from Claude');
+    }
+    
+    // Extract JSON from potential markdown code blocks
+    let jsonContent = generatedContent;
+    const jsonMatch = generatedContent.match(/```(?:json)?\s*(\{[\s\S]*\})\s*```/);
+    if (jsonMatch) {
+      jsonContent = jsonMatch[1];
+    }
+    
+    const processData = JSON.parse(jsonContent);
 
     console.log('AI generation complete, persisting to database...');
 

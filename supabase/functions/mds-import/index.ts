@@ -56,6 +56,14 @@ Deno.serve(async (req) => {
       try {
         const rowHash = generateRowHash(row);
         
+        // Check if row exists before upsert
+        const { data: existingRow } = await supabase
+          .from('mds_data')
+          .select('row_hash')
+          .eq('service_external_id', row.service_external_id)
+          .eq('step_external_id', row.step_external_id)
+          .single();
+
         // Upsert MDS data
         const { error: upsertError } = await supabase
           .from('mds_data')
@@ -81,18 +89,11 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        // Check if this is a new insert or update based on row_hash
-        const { data: existingRow } = await supabase
-          .from('mds_data')
-          .select('row_hash')
-          .eq('service_external_id', row.service_external_id)
-          .eq('step_external_id', row.step_external_id)
-          .single();
-
-        if (existingRow && existingRow.row_hash !== rowHash) {
-          updated++;
-        } else if (!existingRow) {
+        // Track if this was insert or update
+        if (!existingRow) {
           inserted++;
+        } else if (existingRow.row_hash !== rowHash) {
+          updated++;
         }
 
         // Ensure manual_services record exists

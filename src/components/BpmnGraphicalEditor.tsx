@@ -180,26 +180,21 @@ export function BpmnGraphicalEditor({
     console.log("BpmnEditor: Initialize effect running");
     let destroyed = false;
     let modeler: BpmnModeler | null = null;
-    let retryCount = 0;
-    const maxRetries = 20; // Max 1 second of retries
 
-    const init = () => {
+    const init = async () => {
+      // Give the DOM a moment to fully render
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
       if (destroyed) return;
 
       if (!containerRef.current || !propertiesPanelRef.current) {
-        // Wait until refs are attached
-        retryCount++;
-        if (retryCount >= maxRetries) {
-          console.error("BpmnEditor: Refs not available after max retries");
-          toast.error("Failed to initialize BPMN editor - container not ready");
-          setLoading(false);
-          return;
-        }
-        setTimeout(init, 50);
+        console.error("BpmnEditor: Container refs not available");
+        toast.error("Failed to initialize BPMN editor - DOM not ready");
+        setLoading(false);
         return;
       }
 
-      console.log("BpmnEditor: Initializing modeler");
+      console.log("BpmnEditor: Initializing modeler with refs");
 
       try {
         modeler = new BpmnModeler({
@@ -232,7 +227,6 @@ export function BpmnGraphicalEditor({
               const match = calledElement.match(/Process_Sub_(.+)$/);
               if (match) {
                 const stepExternalId = match[1];
-                // Try lookup by calledElement → subprocess via steps table if available
                 const { data, error } = await supabase
                   .from("manual_service_steps")
                   .select("subprocess_id")
@@ -251,13 +245,8 @@ export function BpmnGraphicalEditor({
           }
         });
 
-        // Defer load to next tick to ensure layout is ready
-        setTimeout(() => {
-          loadBpmn().catch((err) => {
-            console.error("BpmnEditor: loadBpmn failed", err);
-            toast.error("Failed to load BPMN: " + (err.message || "Unknown error"));
-          });
-        }, 0);
+        // Load BPMN data
+        await loadBpmn();
       } catch (error) {
         console.error("BpmnEditor: Failed to initialize modeler", error);
         toast.error("Failed to initialize BPMN editor: " + (error instanceof Error ? error.message : "Unknown error"));

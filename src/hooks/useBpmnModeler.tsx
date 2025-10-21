@@ -18,6 +18,7 @@ export function useBpmnModeler({ entityId, entityType, onAutoSave }: UseBpmnMode
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const changeListenersRef = useRef<Set<() => void>>(new Set());
   const suppressSaveRef = useRef(false);
+  const tabIdRef = useRef(`tab_${Math.random().toString(36).substring(7)}`);
 
   const tableName = entityType === "service" ? "manual_services" : "subprocesses";
 
@@ -97,7 +98,7 @@ export function useBpmnModeler({ entityId, entityType, onAutoSave }: UseBpmnMode
 
         // Broadcast to other tabs
         const bc = new BroadcastChannel("bpmn");
-        bc.postMessage({ entityId, timestamp: Date.now() });
+        bc.postMessage({ entityId, timestamp: Date.now(), tabId: tabIdRef.current });
         bc.close();
 
         toast.success("Changes saved");
@@ -169,6 +170,9 @@ export function useBpmnModeler({ entityId, entityType, onAutoSave }: UseBpmnMode
     bc.onmessage = async (event) => {
       if (event.data.entityId !== entityId) return;
       
+      // Ignore messages from this tab
+      if (event.data.tabId === tabIdRef.current) return;
+      
       // Reload from database
       const { supabase } = await import("@/integrations/supabase/client");
       const { data } = await supabase
@@ -236,7 +240,7 @@ export function useBpmnModeler({ entityId, entityType, onAutoSave }: UseBpmnMode
         
         // Broadcast reset
         const bc = new BroadcastChannel("bpmn");
-        bc.postMessage({ entityId, timestamp: Date.now() });
+        bc.postMessage({ entityId, timestamp: Date.now(), tabId: tabIdRef.current });
         bc.close();
         
         toast.success("Reset to AI version");

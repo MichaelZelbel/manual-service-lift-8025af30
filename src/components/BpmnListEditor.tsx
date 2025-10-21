@@ -385,8 +385,17 @@ export function BpmnListEditor({
     const { active, over } = event;
     if (!over || active.id === over.id) return;
 
-    const oldIndex = elements.findIndex((el) => el.id === active.id);
-    const newIndex = elements.findIndex((el) => el.id === over.id);
+    console.log("Drag ended:", active.id, "->", over.id);
+
+    const oldIndex = filteredElements.findIndex((el) => el.id === active.id);
+    const newIndex = filteredElements.findIndex((el) => el.id === over.id);
+
+    console.log("Indices:", oldIndex, newIndex);
+
+    if (oldIndex === -1 || newIndex === -1) {
+      toast.error("Could not find elements to swap");
+      return;
+    }
 
     await performSwap(oldIndex, newIndex);
   };

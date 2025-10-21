@@ -325,6 +325,36 @@ export function BpmnListEditor({
     }
   }, []);
 
+  // Listen for changes from other editors
+  useEffect(() => {
+    let lastUpdate = localStorage.getItem(`bpmn_updated_${entityId}`);
+    
+    const checkForUpdates = setInterval(() => {
+      const currentUpdate = localStorage.getItem(`bpmn_updated_${entityId}`);
+      if (currentUpdate && currentUpdate !== lastUpdate && modeler) {
+        lastUpdate = currentUpdate;
+        // Reload BPMN from database
+        supabase
+          .from(tableName)
+          .select("edited_bpmn_xml, original_bpmn_xml")
+          .eq("id", entityId)
+          .single()
+          .then(({ data, error }) => {
+            if (error || !data) return;
+            const xml = data.edited_bpmn_xml || data.original_bpmn_xml;
+            if (xml) {
+              modeler.importXML(xml).then(() => {
+                parseElements(modeler);
+                toast.info("Updated from Graphical Editor");
+              });
+            }
+          });
+      }
+    }, 500);
+
+    return () => clearInterval(checkForUpdates);
+  }, [entityId, modeler, tableName, parseElements]);
+
   // Debounced save
   const saveBpmn = useCallback(async () => {
     if (!modeler) return;
@@ -340,6 +370,10 @@ export function BpmnListEditor({
         .eq("id", entityId);
 
       if (error) throw error;
+      
+      // Signal other editors to reload
+      localStorage.setItem(`bpmn_updated_${entityId}`, Date.now().toString());
+      
       toast.success("Changes saved");
       onSave?.();
     } catch (error) {

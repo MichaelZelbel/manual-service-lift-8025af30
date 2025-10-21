@@ -122,6 +122,10 @@ export function BpmnGraphicalEditor({
         edited_bpmn_xml: xml
       }).eq("id", entityId);
       if (error) throw error;
+      
+      // Signal other editors to reload
+      localStorage.setItem(`bpmn_updated_${entityId}`, Date.now().toString());
+      
       toast.success("Changes saved");
       onSave?.();
     } catch (error) {
@@ -228,6 +232,21 @@ export function BpmnGraphicalEditor({
       eventBus.off("element.dblclick", onDblClick);
     };
   }, [debouncedSave, entityType, entityId, navigate]);
+
+  // Listen for changes from other editors
+  useEffect(() => {
+    let lastUpdate = localStorage.getItem(`bpmn_updated_${entityId}`);
+    
+    const checkForUpdates = setInterval(() => {
+      const currentUpdate = localStorage.getItem(`bpmn_updated_${entityId}`);
+      if (currentUpdate && currentUpdate !== lastUpdate) {
+        lastUpdate = currentUpdate;
+        loadBpmn();
+      }
+    }, 500);
+
+    return () => clearInterval(checkForUpdates);
+  }, [entityId, loadBpmn]);
 
   // Zoom controls
   const handleZoomIn = () => {

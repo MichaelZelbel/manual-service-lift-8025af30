@@ -180,12 +180,21 @@ export function BpmnGraphicalEditor({
     console.log("BpmnEditor: Initialize effect running");
     let destroyed = false;
     let modeler: BpmnModeler | null = null;
+    let retryCount = 0;
+    const maxRetries = 20; // Max 1 second of retries
 
     const init = () => {
       if (destroyed) return;
 
       if (!containerRef.current || !propertiesPanelRef.current) {
         // Wait until refs are attached
+        retryCount++;
+        if (retryCount >= maxRetries) {
+          console.error("BpmnEditor: Refs not available after max retries");
+          toast.error("Failed to initialize BPMN editor - container not ready");
+          setLoading(false);
+          return;
+        }
         setTimeout(init, 50);
         return;
       }
@@ -244,11 +253,14 @@ export function BpmnGraphicalEditor({
 
         // Defer load to next tick to ensure layout is ready
         setTimeout(() => {
-          loadBpmn().catch((err) => console.error("BpmnEditor: loadBpmn failed", err));
+          loadBpmn().catch((err) => {
+            console.error("BpmnEditor: loadBpmn failed", err);
+            toast.error("Failed to load BPMN: " + (err.message || "Unknown error"));
+          });
         }, 0);
       } catch (error) {
         console.error("BpmnEditor: Failed to initialize modeler", error);
-        toast.error("Failed to initialize BPMN editor");
+        toast.error("Failed to initialize BPMN editor: " + (error instanceof Error ? error.message : "Unknown error"));
         setLoading(false);
       }
     };

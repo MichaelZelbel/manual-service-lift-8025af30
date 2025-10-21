@@ -272,46 +272,6 @@ export function BpmnListEditor({
     }
   }, []);
 
-  // Listen for changes via BroadcastChannel
-  useEffect(() => {
-    if (!modeler) return;
-    
-    const bc = new BroadcastChannel("bpmn");
-    bc.onmessage = () => {
-      parseElements(modeler);
-      toast.info("Updated from Graphical Editor");
-    };
-    
-    return () => bc.close();
-  }, [modeler, parseElements]);
-
-  // Save immediately (shared modeler handles debouncing)
-  const saveBpmn = useCallback(async () => {
-    if (!modeler) return;
-    try {
-      const { xml } = await modeler.saveXML({ format: true });
-      if (!xml || !xml.includes("<bpmn:definitions")) {
-        throw new Error("Invalid BPMN XML");
-      }
-
-      const { error } = await supabase
-        .from(tableName)
-        .update({ edited_bpmn_xml: xml })
-        .eq("id", entityId);
-
-      if (error) throw error;
-      
-      const bc = new BroadcastChannel("bpmn");
-      bc.postMessage({ entityId, timestamp: Date.now() });
-      bc.close();
-      
-      toast.success("Changes saved");
-    } catch (error) {
-      console.error("Error saving BPMN:", error);
-      toast.error("Failed to save changes");
-    }
-  }, [modeler, entityId, tableName]);
-
   // Perform BPMN-aware swap - completely exchange connections
   const performSwap = useCallback(
     async (indexA: number, indexB: number) => {
@@ -412,12 +372,11 @@ export function BpmnListEditor({
     if (commandStack.canUndo()) {
       commandStack.undo();
       parseElements(modeler);
-      saveBpmn();
       toast.success("Undone");
     } else {
       toast.info("Nothing to undo");
     }
-  }, [modeler, parseElements, saveBpmn]);
+  }, [modeler, parseElements]);
 
   // Filtered elements
   const filteredElements = (() => {

@@ -54,9 +54,9 @@ interface BpmnElement {
 }
 
 interface BpmnListEditorProps {
+  modeler: BpmnModeler;
   entityId: string;
   entityType: "service" | "subprocess";
-  onSave?: () => void;
 }
 
 interface SortableElementProps {
@@ -164,19 +164,15 @@ function SortableElement({
 }
 
 export function BpmnListEditor({
+  modeler,
   entityId,
   entityType,
-  onSave,
 }: BpmnListEditorProps) {
   const navigate = useNavigate();
-  const [modeler, setModeler] = useState<BpmnModeler | null>(null);
   const [elements, setElements] = useState<BpmnElement[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedElement, setSelectedElement] = useState<BpmnElement | null>(
-    null
-  );
-  const [lastSaveTime, setLastSaveTime] = useState<NodeJS.Timeout | null>(null);
+  const [selectedElement, setSelectedElement] = useState<BpmnElement | null>(null);
 
   const tableName = entityType === "service" ? "manual_services" : "subprocesses";
 
@@ -187,68 +183,19 @@ export function BpmnListEditor({
     })
   );
 
-  // Initialize headless modeler
+  // Parse elements on mount
   useEffect(() => {
-    const initModeler = async () => {
-      try {
-        console.log("BpmnListEditor: Initializing for", entityType, entityId);
-        setLoading(true);
-        
-        // Create headless modeler without keyboard binding
-        const mod = new BpmnModeler({
-          container: document.createElement("div"),
-          moddleExtensions: { zeebe: zeebeModdle as any },
-        });
-        setModeler(mod);
-        console.log("BpmnListEditor: Modeler created");
-
-        // Load BPMN
-        console.log("BpmnListEditor: Loading from table", tableName);
-        const { data, error } = await supabase
-          .from(tableName)
-          .select("original_bpmn_xml, edited_bpmn_xml")
-          .eq("id", entityId)
-          .single();
-
-        if (error) {
-          console.error("BpmnListEditor: Database error", error);
-          throw error;
-        }
-
-        console.log("BpmnListEditor: Data fetched", {
-          hasOriginal: !!data?.original_bpmn_xml,
-          hasEdited: !!data?.edited_bpmn_xml
-        });
-
-        const xmlToLoad =
-          data.edited_bpmn_xml || data.original_bpmn_xml || "";
-        if (!xmlToLoad) {
-          console.error("BpmnListEditor: No XML data found");
-          toast.error("No BPMN diagram found");
-          setLoading(false);
-          return;
-        }
-
-        console.log("BpmnListEditor: Importing XML, length:", xmlToLoad.length);
-        await mod.importXML(xmlToLoad);
-        console.log("BpmnListEditor: XML imported successfully");
-        
-        parseElements(mod);
-        console.log("BpmnListEditor: Elements parsed");
-      } catch (error) {
-        console.error("BpmnListEditor: Error initializing modeler:", error);
-        toast.error("Failed to load BPMN diagram");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    initModeler();
-
-    return () => {
-      if (lastSaveTime) clearTimeout(lastSaveTime);
-    };
-  }, [entityId, entityType]);
+    if (!modeler) return;
+    try {
+      setLoading(true);
+      parseElements(modeler);
+    } catch (error) {
+      console.error("Error parsing elements:", error);
+      toast.error("Failed to parse BPMN elements");
+    } finally {
+      setLoading(false);
+    }
+  }, [modeler]);
 
   // Parse elements from BPMN
   const parseElements = useCallback((mod: BpmnModeler) => {
@@ -325,42 +272,20 @@ export function BpmnListEditor({
     }
   }, []);
 
-  // Listen for changes from other editors
+  // Listen for changes via BroadcastChannel
   useEffect(() => {
-    let lastUpdate = localStorage.getItem(`bpmn_updated_${entityId}`);
-    let myLastSave = localStorage.getItem(`bpmn_my_save_${entityId}_list`);
+    if (!modeler) return;
     
-    const checkForUpdates = setInterval(() => {
-      const currentUpdate = localStorage.getItem(`bpmn_updated_${entityId}`);
-      const currentMyLastSave = localStorage.getItem(`bpmn_my_save_${entityId}_list`);
-      
-      // Only reload if the update is from another editor (not my own save)
-      if (currentUpdate && currentUpdate !== lastUpdate && currentUpdate !== currentMyLastSave && modeler) {
-        lastUpdate = currentUpdate;
-        myLastSave = currentMyLastSave;
-        // Reload BPMN from database
-        supabase
-          .from(tableName)
-          .select("edited_bpmn_xml, original_bpmn_xml")
-          .eq("id", entityId)
-          .single()
-          .then(({ data, error }) => {
-            if (error || !data) return;
-            const xml = data.edited_bpmn_xml || data.original_bpmn_xml;
-            if (xml) {
-              modeler.importXML(xml).then(() => {
-                parseElements(modeler);
-                toast.info("Updated from Graphical Editor");
-              });
-            }
-          });
-      }
-    }, 500);
+    const bc = new BroadcastChannel("bpmn");
+    bc.onmessage = () => {
+      parseElements(modeler);
+      toast.info("Updated from Graphical Editor");
+    };
+    
+    return () => bc.close();
+  }, [modeler, parseElements]);
 
-    return () => clearInterval(checkForUpdates);
-  }, [entityId, modeler, tableName, parseElements]);
-
-  // Debounced save
+  // Save immediately (shared modeler handles debouncing)
   const saveBpmn = useCallback(async () => {
     if (!modeler) return;
     try {
@@ -376,26 +301,16 @@ export function BpmnListEditor({
 
       if (error) throw error;
       
-      // Signal other editors to reload, but mark it as my save
-      const timestamp = Date.now().toString();
-      localStorage.setItem(`bpmn_updated_${entityId}`, timestamp);
-      localStorage.setItem(`bpmn_my_save_${entityId}_list`, timestamp);
+      const bc = new BroadcastChannel("bpmn");
+      bc.postMessage({ entityId, timestamp: Date.now() });
+      bc.close();
       
       toast.success("Changes saved");
-      onSave?.();
     } catch (error) {
       console.error("Error saving BPMN:", error);
       toast.error("Failed to save changes");
     }
-  }, [modeler, entityId, tableName, onSave]);
-
-  const debouncedSave = useCallback(() => {
-    if (lastSaveTime) clearTimeout(lastSaveTime);
-    const timeout = setTimeout(() => {
-      saveBpmn();
-    }, 1200);
-    setLastSaveTime(timeout);
-  }, [saveBpmn, lastSaveTime]);
+  }, [modeler, entityId, tableName]);
 
   // Perform BPMN-aware swap - completely exchange connections
   const performSwap = useCallback(
@@ -473,7 +388,6 @@ export function BpmnListEditor({
         parseElements(modeler);
 
         toast.success(`Swapped '${elA.name}' with '${elB.name}'`);
-        onSave?.();
       } catch (error) {
         console.error("Error performing swap:", error);
         toast.error("Swap failed - reverting");
@@ -518,12 +432,12 @@ export function BpmnListEditor({
     if (commandStack.canUndo()) {
       commandStack.undo();
       parseElements(modeler);
-      debouncedSave();
+      saveBpmn();
       toast.success("Undone");
     } else {
       toast.info("Nothing to undo");
     }
-  }, [modeler, parseElements, debouncedSave]);
+  }, [modeler, parseElements, saveBpmn]);
 
   // Filtered elements
   const filteredElements = (() => {

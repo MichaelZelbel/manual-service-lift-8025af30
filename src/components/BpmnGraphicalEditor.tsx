@@ -1,370 +1,79 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import BpmnModeler from "bpmn-js/lib/Modeler";
-import { BpmnPropertiesPanelModule, BpmnPropertiesProviderModule, ZeebePropertiesProviderModule } from "bpmn-js-properties-panel";
-// @ts-ignore - zeebe moddle doesn't have types
-import zeebeModdle from "zeebe-bpmn-moddle/resources/zeebe.json";
-import minimapModule from "diagram-js-minimap";
-import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { toast } from "sonner";
-import { ZoomIn, ZoomOut, Maximize2, Map, Upload, Download, RotateCcw, Save } from "lucide-react";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { ZoomIn, ZoomOut, Maximize2, Map } from "lucide-react";
 import 'bpmn-js/dist/assets/diagram-js.css';
 import 'bpmn-js/dist/assets/bpmn-font/css/bpmn.css';
 import 'bpmn-js/dist/assets/bpmn-js.css';
 import 'diagram-js-minimap/assets/diagram-js-minimap.css';
+import 'bpmn-js-properties-panel/dist/assets/properties-panel.css';
+
 interface BpmnGraphicalEditorProps {
-  entityId: string;
-  entityType: "service" | "subprocess";
-  onSave?: () => void;
+  modeler: BpmnModeler;
 }
-const EMPTY_BPMN = `<?xml version="1.0" encoding="UTF-8"?>
-<bpmn:definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-  xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
-  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
-  xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
-  xmlns:camunda="http://camunda.org/schema/1.0/bpmn"
-  id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
-  <bpmn:process id="Process_1" isExecutable="true">
-    <bpmn:startEvent id="StartEvent_1" name="Start"/>
-  </bpmn:process>
-  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
-    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="Process_1">
-      <bpmndi:BPMNShape id="StartEvent_1_di" bpmnElement="StartEvent_1">
-        <dc:Bounds x="173" y="102" width="36" height="36"/>
-      </bpmndi:BPMNShape>
-    </bpmndi:BPMNPlane>
-  </bpmndi:BPMNDiagram>
-</bpmn:definitions>`;
-export function BpmnGraphicalEditor({
-  entityId,
-  entityType,
-  onSave
-}: BpmnGraphicalEditorProps) {
+
+export function BpmnGraphicalEditor({ modeler }: BpmnGraphicalEditorProps) {
   const navigate = useNavigate();
-  const modelerRef = useRef<BpmnModeler | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const propertiesPanelRef = useRef<HTMLDivElement>(null);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [showMinimap, setShowMinimap] = useState(true);
-  const [showResetDialog, setShowResetDialog] = useState(false);
-  const [originalXml, setOriginalXml] = useState<string>("");
-  const saveTimeoutRef = useRef<NodeJS.Timeout>();
-  const suppressSaveRef = useRef(false);
-  const tableName = entityType === "service" ? "manual_services" : "subprocesses";
+  const mountedRef = useRef(false);
 
-  // Load BPMN from database
-  const loadBpmn = useCallback(async () => {
-    console.log("BpmnEditor: loadBpmn called for", entityType, entityId);
+  // Mount the modeler canvas to our container
+  useEffect(() => {
+    if (!containerRef.current || !propertiesPanelRef.current || mountedRef.current) return;
+
     try {
-      setLoading(true);
-      console.log("BpmnEditor: Fetching from table", tableName);
-      const {
-        data,
-        error
-      } = await supabase.from(tableName).select("original_bpmn_xml, edited_bpmn_xml").eq("id", entityId).single();
-      if (error) {
-        console.error("BpmnEditor: Database error", error);
-        throw error;
+      // Attach canvas
+      const canvas = modeler.get("canvas") as any;
+      const container = containerRef.current;
+      const modelerContainer = canvas._container;
+      if (modelerContainer && !container.contains(modelerContainer)) {
+        container.appendChild(modelerContainer);
       }
-      console.log("BpmnEditor: Data fetched", {
-        hasOriginal: !!data.original_bpmn_xml,
-        hasEdited: !!data.edited_bpmn_xml
-      });
-      const xmlToLoad = data.edited_bpmn_xml || data.original_bpmn_xml || EMPTY_BPMN;
-      setOriginalXml(data.original_bpmn_xml || EMPTY_BPMN);
-      if (modelerRef.current) {
-        console.log("BpmnEditor: Importing XML into modeler");
-        suppressSaveRef.current = true;
-        await modelerRef.current.importXML(xmlToLoad);
-        suppressSaveRef.current = false;
-        console.log("BpmnEditor: XML imported successfully");
-        const canvas = modelerRef.current.get("canvas") as any;
-        canvas.zoom("fit-viewport");
-        toast.success("BPMN loaded successfully");
-      } else {
-        console.warn("BpmnEditor: Modeler ref not available");
-      }
+      canvas.zoom("fit-viewport");
+
+      // Attach properties panel
+      const propertiesPanel = modeler.get("propertiesPanel") as any;
+      propertiesPanel.attachTo(propertiesPanelRef.current);
+
+      mountedRef.current = true;
     } catch (error) {
-      console.error("BpmnEditor: Error loading BPMN:", error);
-      toast.error("Failed to load BPMN diagram");
-      // Load empty diagram on error
-      if (modelerRef.current) {
-        try {
-          await modelerRef.current.importXML(EMPTY_BPMN);
-        } catch (e) {
-          console.error("BpmnEditor: Failed to load empty diagram", e);
-        }
-      }
-    } finally {
-      console.log("BpmnEditor: Setting loading to false");
-      setLoading(false);
+      console.error("Error mounting BPMN editor:", error);
     }
-  }, [entityId, tableName, entityType]);
 
-  // Save BPMN to database (debounced)
-  const saveBpmn = useCallback(async () => {
-    if (!modelerRef.current) return;
-    try {
-      setSaving(true);
-      const {
-        xml
-      } = await modelerRef.current.saveXML({
-        format: true
-      });
-
-      // Validate XML
-      if (!xml || !xml.includes("<bpmn:definitions")) {
-        throw new Error("Invalid BPMN XML");
-      }
-      const {
-        error
-      } = await supabase.from(tableName).update({
-        edited_bpmn_xml: xml
-      }).eq("id", entityId);
-      if (error) throw error;
-      
-      // Signal other editors to reload, but mark it as my save
-      const timestamp = Date.now().toString();
-      localStorage.setItem(`bpmn_updated_${entityId}`, timestamp);
-      localStorage.setItem(`bpmn_my_save_${entityId}_graphical`, timestamp);
-      
-      toast.success("Changes saved");
-      onSave?.();
-    } catch (error) {
-      console.error("Error saving BPMN:", error);
-      toast.error("Failed to save changes");
-    } finally {
-      setSaving(false);
-    }
-  }, [entityId, tableName, onSave]);
-
-  // Debounced auto-save
-  const debouncedSave = useCallback(() => {
-    if (saveTimeoutRef.current) {
-      clearTimeout(saveTimeoutRef.current);
-    }
-    saveTimeoutRef.current = setTimeout(() => {
-      saveBpmn();
-    }, 1200);
-  }, [saveBpmn]);
-
-  // Initialize modeler
-  useEffect(() => {
-    console.log("BpmnEditor: Initialize effect running");
-    let destroyed = false;
-    let modeler: BpmnModeler | null = null;
-    const init = async () => {
-      // Give the DOM a moment to fully render
-      await new Promise(resolve => setTimeout(resolve, 100));
-      if (destroyed) return;
-      if (!containerRef.current || !propertiesPanelRef.current) {
-        console.error("BpmnEditor: Container refs not available");
-        toast.error("Failed to initialize BPMN editor - DOM not ready");
-        setLoading(false);
-        return;
-      }
-      console.log("BpmnEditor: Initializing modeler with refs");
-      try {
-        modeler = new BpmnModeler({
-          container: containerRef.current,
-          propertiesPanel: {
-            parent: propertiesPanelRef.current
-          },
-          additionalModules: [BpmnPropertiesPanelModule, BpmnPropertiesProviderModule, ZeebePropertiesProviderModule, minimapModule],
-          moddleExtensions: {
-            zeebe: zeebeModdle
-          }
-        });
-        modelerRef.current = modeler;
-        console.log("BpmnEditor: Modeler created successfully");
-
-        // Event listeners are registered in a separate effect after modeler is ready
-
-        // Load BPMN data
-        await loadBpmn();
-      } catch (error) {
-        console.error("BpmnEditor: Failed to initialize modeler", error);
-        toast.error("Failed to initialize BPMN editor: " + (error instanceof Error ? error.message : "Unknown error"));
-        setLoading(false);
-      }
-    };
-    init();
     return () => {
-      destroyed = true;
-      console.log("BpmnEditor: Cleaning up");
-      modeler?.destroy();
-      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      // Don't unmount on cleanup - keep the modeler attached
     };
-  }, [entityId, entityType]);
-
-  // Register event listeners after modeler is ready
-  useEffect(() => {
-    const modeler = modelerRef.current;
-    if (!modeler) return;
-    const eventBus = modeler.get("eventBus") as any;
-    const onChanged = () => {
-      if (suppressSaveRef.current) return;
-      debouncedSave();
-    };
-    const onDblClick = async (event: any) => {
-      const element = event.element;
-      if (element.type === "bpmn:CallActivity" && entityType === "service") {
-        const calledElement = element.businessObject.calledElement;
-        if (calledElement) {
-          const match = calledElement.match(/Process_Sub_(.+)$/);
-          if (match) {
-            const stepExternalId = match[1];
-            const {
-              data,
-              error
-            } = await supabase.from("manual_service_steps").select("subprocess_id").eq("service_id", entityId).maybeSingle();
-            if (error) console.warn("Lookup error", error);
-            if (data?.subprocess_id) {
-              navigate(`/subprocess/${data.subprocess_id}`);
-            } else {
-              toast.error("No linked subprocess found");
-            }
-          }
-        }
-      }
-    };
-    eventBus.on("commandStack.changed", onChanged);
-    eventBus.on("element.dblclick", onDblClick);
-    return () => {
-      eventBus.off("commandStack.changed", onChanged);
-      eventBus.off("element.dblclick", onDblClick);
-    };
-  }, [debouncedSave, entityType, entityId, navigate]);
-
-  // Listen for changes from other editors
-  useEffect(() => {
-    let lastUpdate = localStorage.getItem(`bpmn_updated_${entityId}`);
-    let myLastSave = localStorage.getItem(`bpmn_my_save_${entityId}_graphical`);
-    
-    const checkForUpdates = setInterval(() => {
-      const currentUpdate = localStorage.getItem(`bpmn_updated_${entityId}`);
-      const currentMyLastSave = localStorage.getItem(`bpmn_my_save_${entityId}_graphical`);
-      
-      // Only reload if the update is from another editor (not my own save)
-      if (currentUpdate && currentUpdate !== lastUpdate && currentUpdate !== currentMyLastSave) {
-        lastUpdate = currentUpdate;
-        myLastSave = currentMyLastSave;
-        loadBpmn();
-        toast.info("Updated from List Editor");
-      }
-    }, 500);
-
-    return () => clearInterval(checkForUpdates);
-  }, [entityId, loadBpmn]);
+  }, [modeler]);
 
   // Zoom controls
   const handleZoomIn = () => {
-    const canvas = modelerRef.current?.get("canvas") as any;
-    canvas?.zoom(canvas.zoom() + 0.1);
+    const canvas = modeler.get("canvas") as any;
+    canvas.zoom(canvas.zoom() + 0.1);
   };
+
   const handleZoomOut = () => {
-    const canvas = modelerRef.current?.get("canvas") as any;
-    canvas?.zoom(canvas.zoom() - 0.1);
+    const canvas = modeler.get("canvas") as any;
+    canvas.zoom(canvas.zoom() - 0.1);
   };
+
   const handleFitViewport = () => {
-    const canvas = modelerRef.current?.get("canvas") as any;
-    canvas?.zoom("fit-viewport");
+    const canvas = modeler.get("canvas") as any;
+    canvas.zoom("fit-viewport");
   };
+
   const handleToggleMinimap = () => {
     setShowMinimap(!showMinimap);
-    const minimap = modelerRef.current?.get("minimap") as any;
+    const minimap = modeler.get("minimap") as any;
     if (minimap) {
       showMinimap ? minimap.close() : minimap.open();
     }
   };
 
-  // Import BPMN
-  const handleImport = () => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = ".bpmn,.xml";
-    input.onchange = async e => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (!file) return;
-      try {
-        const text = await file.text();
-        if (!text.includes("<bpmn:definitions")) {
-          throw new Error("Invalid BPMN file");
-        }
-        suppressSaveRef.current = true;
-        await modelerRef.current?.importXML(text);
-        suppressSaveRef.current = false;
-        const canvas = modelerRef.current?.get("canvas") as any;
-        canvas?.zoom("fit-viewport");
-        toast.success("BPMN imported successfully");
-        debouncedSave();
-      } catch (error) {
-        console.error("Import error:", error);
-        toast.error("Failed to import BPMN file");
-      }
-    };
-    input.click();
-  };
-
-  // Export BPMN
-  const handleExport = async () => {
-    try {
-      const {
-        xml
-      } = await modelerRef.current.saveXML({
-        format: true
-      });
-      const blob = new Blob([xml], {
-        type: "application/xml"
-      });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${entityType}_${entityId}.bpmn`;
-      a.click();
-      URL.revokeObjectURL(url);
-      toast.success("BPMN exported successfully");
-    } catch (error) {
-      console.error("Export error:", error);
-      toast.error("Failed to export BPMN");
-    }
-  };
-
-  // Reset to AI version
-  const handleReset = async () => {
-    try {
-      if (!originalXml) {
-        toast.error("No original version available");
-        return;
-      }
-      // Import original without triggering autosave
-      suppressSaveRef.current = true;
-      await modelerRef.current?.importXML(originalXml);
-      suppressSaveRef.current = false;
-      const canvas = modelerRef.current?.get("canvas") as any;
-      canvas?.zoom("fit-viewport");
-
-      // Clear edited version in database
-      await supabase.from(tableName).update({
-        edited_bpmn_xml: null
-      }).eq("id", entityId);
-
-      // Broadcast update
-      const ts = Date.now().toString();
-      localStorage.setItem(`bpmn_updated_${entityId}`, ts);
-      localStorage.setItem(`bpmn_my_save_${entityId}_graphical`, ts);
-
-      toast.success("Reset to AI version successfully");
-      setShowResetDialog(false);
-    } catch (error) {
-      console.error("Reset error:", error);
-      toast.error("Failed to reset to AI version");
-    }
-  };
-  return <div className="space-y-4">
+  return (
+    <div className="space-y-4">
       {/* Toolbar */}
       <div className="flex items-center justify-between bg-card p-4 rounded-lg border border-border">
         <div className="flex items-center gap-2">
@@ -377,20 +86,13 @@ export function BpmnGraphicalEditor({
           <Button variant="outline" size="sm" onClick={handleFitViewport}>
             <Maximize2 className="h-4 w-4" />
           </Button>
-          <Button variant="outline" size="sm" onClick={handleToggleMinimap} className={showMinimap ? "bg-accent" : ""}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleToggleMinimap}
+            className={showMinimap ? "bg-accent" : ""}
+          >
             <Map className="h-4 w-4" />
-          </Button>
-        </div>
-
-        <div className="flex items-center gap-2">
-          {saving && <span className="text-sm text-muted-foreground">Saving...</span>}
-          <Button variant="outline" size="sm" onClick={handleImport}>
-            <Upload className="h-4 w-4 mr-2" />
-            Import
-          </Button>
-          <Button variant="outline" size="sm" onClick={handleExport}>
-            <Download className="h-4 w-4 mr-2" />
-            Export
           </Button>
         </div>
       </div>
@@ -398,31 +100,19 @@ export function BpmnGraphicalEditor({
       {/* Editor Container */}
       <div className="flex gap-4">
         {/* Canvas */}
-        <div ref={containerRef} className="flex-1 bg-card rounded-lg border border-border shadow-sm" style={{
-        height: "600px"
-      }} />
+        <div
+          ref={containerRef}
+          className="flex-1 bg-card rounded-lg border border-border shadow-sm"
+          style={{ height: "600px" }}
+        />
 
         {/* Properties Panel */}
-        <div ref={propertiesPanelRef} className="w-[360px] bg-card rounded-lg border border-border shadow-sm overflow-auto" style={{
-        height: "600px"
-      }} />
+        <div
+          ref={propertiesPanelRef}
+          className="w-[360px] bg-card rounded-lg border border-border shadow-sm overflow-auto"
+          style={{ height: "600px" }}
+        />
       </div>
-
-      {/* Reset Confirmation Dialog */}
-      <AlertDialog open={showResetDialog} onOpenChange={setShowResetDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Reset to AI Version?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will discard all your changes and restore the original
-              AI-generated BPMN diagram. This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleReset}>Reset</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </div>;
+    </div>
+  );
 }

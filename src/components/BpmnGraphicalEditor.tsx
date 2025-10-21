@@ -123,8 +123,10 @@ export function BpmnGraphicalEditor({
       }).eq("id", entityId);
       if (error) throw error;
       
-      // Signal other editors to reload
-      localStorage.setItem(`bpmn_updated_${entityId}`, Date.now().toString());
+      // Signal other editors to reload, but mark it as my save
+      const timestamp = Date.now().toString();
+      localStorage.setItem(`bpmn_updated_${entityId}`, timestamp);
+      localStorage.setItem(`bpmn_my_save_${entityId}_graphical`, timestamp);
       
       toast.success("Changes saved");
       onSave?.();
@@ -236,12 +238,18 @@ export function BpmnGraphicalEditor({
   // Listen for changes from other editors
   useEffect(() => {
     let lastUpdate = localStorage.getItem(`bpmn_updated_${entityId}`);
+    let myLastSave = localStorage.getItem(`bpmn_my_save_${entityId}_graphical`);
     
     const checkForUpdates = setInterval(() => {
       const currentUpdate = localStorage.getItem(`bpmn_updated_${entityId}`);
-      if (currentUpdate && currentUpdate !== lastUpdate) {
+      const currentMyLastSave = localStorage.getItem(`bpmn_my_save_${entityId}_graphical`);
+      
+      // Only reload if the update is from another editor (not my own save)
+      if (currentUpdate && currentUpdate !== lastUpdate && currentUpdate !== currentMyLastSave) {
         lastUpdate = currentUpdate;
+        myLastSave = currentMyLastSave;
         loadBpmn();
+        toast.info("Updated from List Editor");
       }
     }, 500);
 

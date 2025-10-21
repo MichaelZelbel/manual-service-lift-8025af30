@@ -328,11 +328,16 @@ export function BpmnListEditor({
   // Listen for changes from other editors
   useEffect(() => {
     let lastUpdate = localStorage.getItem(`bpmn_updated_${entityId}`);
+    let myLastSave = localStorage.getItem(`bpmn_my_save_${entityId}_list`);
     
     const checkForUpdates = setInterval(() => {
       const currentUpdate = localStorage.getItem(`bpmn_updated_${entityId}`);
-      if (currentUpdate && currentUpdate !== lastUpdate && modeler) {
+      const currentMyLastSave = localStorage.getItem(`bpmn_my_save_${entityId}_list`);
+      
+      // Only reload if the update is from another editor (not my own save)
+      if (currentUpdate && currentUpdate !== lastUpdate && currentUpdate !== currentMyLastSave && modeler) {
         lastUpdate = currentUpdate;
+        myLastSave = currentMyLastSave;
         // Reload BPMN from database
         supabase
           .from(tableName)
@@ -371,8 +376,10 @@ export function BpmnListEditor({
 
       if (error) throw error;
       
-      // Signal other editors to reload
-      localStorage.setItem(`bpmn_updated_${entityId}`, Date.now().toString());
+      // Signal other editors to reload, but mark it as my save
+      const timestamp = Date.now().toString();
+      localStorage.setItem(`bpmn_updated_${entityId}`, timestamp);
+      localStorage.setItem(`bpmn_my_save_${entityId}_list`, timestamp);
       
       toast.success("Changes saved");
       onSave?.();

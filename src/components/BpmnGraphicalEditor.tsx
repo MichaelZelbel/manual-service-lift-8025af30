@@ -11,9 +11,10 @@ import '@bpmn-io/properties-panel/dist/assets/properties-panel.css';
 
 interface BpmnGraphicalEditorProps {
   modeler: BpmnModeler;
+  activeTab?: string;
 }
 
-export function BpmnGraphicalEditor({ modeler }: BpmnGraphicalEditorProps) {
+export function BpmnGraphicalEditor({ modeler, activeTab }: BpmnGraphicalEditorProps) {
   const navigate = useNavigate();
   const containerRef = useRef<HTMLDivElement>(null);
   const propertiesPanelRef = useRef<HTMLDivElement>(null);
@@ -47,6 +48,21 @@ export function BpmnGraphicalEditor({ modeler }: BpmnGraphicalEditorProps) {
       // Don't unmount on cleanup - keep the modeler attached
     };
   }, [modeler]);
+
+  // Refresh canvas when switching to graphical tab
+  useEffect(() => {
+    if (activeTab === "graphical" && modeler) {
+      try {
+        const canvas = modeler.get("canvas") as any;
+        // Force canvas to redraw by clearing cached viewbox and refreshing
+        canvas._cachedViewbox = null;
+        const currentViewbox = canvas.viewbox();
+        canvas.viewbox(currentViewbox);
+      } catch (error) {
+        console.error("Error refreshing canvas:", error);
+      }
+    }
+  }, [activeTab, modeler]);
 
   // Zoom controls
   const handleZoomIn = () => {

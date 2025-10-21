@@ -172,7 +172,7 @@ export default function ProcessEditor() {
 
           <TabsContent value="graphical" className="space-y-4">
             {bpmn.modeler && (
-              <BpmnGraphicalEditor modeler={bpmn.modeler} />
+              <BpmnGraphicalEditor modeler={bpmn.modeler} activeTab={activeTab} />
             )}
           </TabsContent>
 

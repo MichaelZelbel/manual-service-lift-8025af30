@@ -1,14 +1,13 @@
-/* BPMN.js styles */
-@import 'bpmn-js/dist/assets/diagram-js.css';
-@import 'bpmn-js/dist/assets/bpmn-js.css';
-@import 'bpmn-js/dist/assets/bpmn-font/css/bpmn-embedded.css';
+/* BPMN.js core styles */
+@import "bpmn-js/dist/assets/diagram-js.css";
+@import "bpmn-js/dist/assets/bpmn-font/css/bpmn.css";
+@import "bpmn-js/dist/assets/bpmn-js.css";
 
-/* Properties Panel styles - using correct path */
-@import 'bpmn-js-properties-panel/dist/assets/element-templates.css';
-@import 'bpmn-js-properties-panel/dist/assets/properties-panel.css';
+/* Properties panel styles */
+@import "bpmn-js-properties-panel/dist/assets/properties-panel.css";
 
 /* Minimap styles */
-@import 'diagram-js-minimap/assets/diagram-js-minimap.css';
+@import "diagram-js-minimap/assets/diagram-js-minimap.css";
 
 /* Custom overrides for theme integration */
 .djs-container {

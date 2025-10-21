@@ -185,6 +185,20 @@ Deno.serve(async (req) => {
 
     console.log(`PDF fetch complete: ${successCount} succeeded, ${failCount} failed`);
 
+    // Trigger process-generation edge function
+    try {
+      console.log(`Triggering process-generation for service ${service_external_id}`);
+      supabase.functions.invoke('process-generation', {
+        body: { service_external_id }
+      }).then(() => {
+        console.log(`Process generation triggered for service ${service_external_id}`);
+      }).catch(err => {
+        console.error(`Failed to trigger process-generation for ${service_external_id}:`, err);
+      });
+    } catch (error) {
+      console.error(`Error triggering process-generation for ${service_external_id}:`, error);
+    }
+
     return new Response(
       JSON.stringify({
         ok: true,

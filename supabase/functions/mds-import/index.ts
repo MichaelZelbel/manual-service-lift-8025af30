@@ -118,14 +118,14 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Queue jobs for each unique service
+    // Queue jobs and trigger processing for each unique service
     for (const serviceId of servicesEnqueued) {
       // Queue PDF fetch job
-      await supabase.from('jobs').insert({
+      const { data: pdfJob } = await supabase.from('jobs').insert({
         service_external_id: serviceId,
         job_type: 'pdf_fetch',
         status: 'queued',
-      });
+      }).select().single();
 
       // Queue process generation job (will run after PDFs are fetched)
       await supabase.from('jobs').insert({
@@ -133,6 +133,22 @@ Deno.serve(async (req) => {
         job_type: 'process_generation',
         status: 'queued',
       });
+
+      // Trigger pdf-fetch edge function immediately
+      if (pdfJob) {
+        try {
+          console.log(`Triggering pdf-fetch for service ${serviceId}`);
+          supabase.functions.invoke('pdf-fetch', {
+            body: { service_external_id: serviceId }
+          }).then(() => {
+            console.log(`PDF fetch triggered for service ${serviceId}`);
+          }).catch(err => {
+            console.error(`Failed to trigger pdf-fetch for ${serviceId}:`, err);
+          });
+        } catch (error) {
+          console.error(`Error triggering pdf-fetch for ${serviceId}:`, error);
+        }
+      }
     }
 
     console.log(`Import complete: ${inserted} inserted, ${updated} updated, ${skipped} skipped`);

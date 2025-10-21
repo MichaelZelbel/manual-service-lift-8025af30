@@ -52,6 +52,7 @@ export function BpmnGraphicalEditor({
   const [showResetDialog, setShowResetDialog] = useState(false);
   const [originalXml, setOriginalXml] = useState<string>("");
   const saveTimeoutRef = useRef<NodeJS.Timeout>();
+  const suppressSaveRef = useRef(false);
   const tableName = entityType === "service" ? "manual_services" : "subprocesses";
 
   // Load BPMN from database
@@ -76,7 +77,9 @@ export function BpmnGraphicalEditor({
       setOriginalXml(data.original_bpmn_xml || EMPTY_BPMN);
       if (modelerRef.current) {
         console.log("BpmnEditor: Importing XML into modeler");
+        suppressSaveRef.current = true;
         await modelerRef.current.importXML(xmlToLoad);
+        suppressSaveRef.current = false;
         console.log("BpmnEditor: XML imported successfully");
         const canvas = modelerRef.current.get("canvas") as any;
         canvas.zoom("fit-viewport");
@@ -203,6 +206,7 @@ export function BpmnGraphicalEditor({
     if (!modeler) return;
     const eventBus = modeler.get("eventBus") as any;
     const onChanged = () => {
+      if (suppressSaveRef.current) return;
       debouncedSave();
     };
     const onDblClick = async (event: any) => {
@@ -290,7 +294,9 @@ export function BpmnGraphicalEditor({
         if (!text.includes("<bpmn:definitions")) {
           throw new Error("Invalid BPMN file");
         }
+        suppressSaveRef.current = true;
         await modelerRef.current?.importXML(text);
+        suppressSaveRef.current = false;
         const canvas = modelerRef.current?.get("canvas") as any;
         canvas?.zoom("fit-viewport");
         toast.success("BPMN imported successfully");
@@ -334,7 +340,10 @@ export function BpmnGraphicalEditor({
         toast.error("No original version available");
         return;
       }
+      // Import original without triggering autosave
+      suppressSaveRef.current = true;
       await modelerRef.current?.importXML(originalXml);
+      suppressSaveRef.current = false;
       const canvas = modelerRef.current?.get("canvas") as any;
       canvas?.zoom("fit-viewport");
 
@@ -342,6 +351,12 @@ export function BpmnGraphicalEditor({
       await supabase.from(tableName).update({
         edited_bpmn_xml: null
       }).eq("id", entityId);
+
+      // Broadcast update
+      const ts = Date.now().toString();
+      localStorage.setItem(`bpmn_updated_${entityId}`, ts);
+      localStorage.setItem(`bpmn_my_save_${entityId}_graphical`, ts);
+
       toast.success("Reset to AI version successfully");
       setShowResetDialog(false);
     } catch (error) {
@@ -376,6 +391,14 @@ export function BpmnGraphicalEditor({
           <Button variant="outline" size="sm" onClick={handleExport}>
             <Download className="h-4 w-4 mr-2" />
             Export
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setShowResetDialog(true)}>
+            <RotateCcw className="h-4 w-4 mr-2" />
+            Reset to AI
+          </Button>
+          <Button size="sm" onClick={saveBpmn}>
+            <Save className="h-4 w-4 mr-2" />
+            Save
           </Button>
           
           

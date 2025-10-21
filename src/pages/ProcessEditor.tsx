@@ -254,6 +254,20 @@ export default function ProcessEditor() {
       );
 
       await Promise.all(updates);
+
+      // Clear edited BPMN so the diagram resets to AI-generated version
+      if (id) {
+        await supabase
+          .from("manual_services")
+          .update({ edited_bpmn_xml: null })
+          .eq("id", id);
+
+        // Broadcast to editors to reload
+        const ts = Date.now().toString();
+        localStorage.setItem(`bpmn_updated_${id}`, ts);
+        localStorage.setItem(`bpmn_my_save_${id}_process_reset`, ts);
+      }
+
       await fetchServiceAndSteps();
       toast.success("Reset to AI version successfully");
     } catch (error) {

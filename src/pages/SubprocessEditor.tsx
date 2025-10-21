@@ -274,6 +274,20 @@ export default function SubprocessEditor() {
       );
 
       await Promise.all(updates);
+
+      // Clear edited BPMN so the diagram resets to AI-generated version
+      if (id) {
+        await supabase
+          .from("subprocesses")
+          .update({ edited_bpmn_xml: null })
+          .eq("id", id);
+
+        // Broadcast to editors to reload
+        const ts = Date.now().toString();
+        localStorage.setItem(`bpmn_updated_${id}`, ts);
+        localStorage.setItem(`bpmn_my_save_${id}_subprocess_reset`, ts);
+      }
+
       await fetchSubprocessAndSteps();
       toast.success("Reset to AI version successfully");
     } catch (error) {

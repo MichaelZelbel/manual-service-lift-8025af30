@@ -215,35 +215,7 @@ export function BpmnGraphicalEditor({
         modelerRef.current = modeler;
         console.log("BpmnEditor: Modeler created successfully");
 
-        const eventBus = modeler.get("eventBus") as any;
-        eventBus.on("commandStack.changed", debouncedSave);
-
-        // Double-click navigation from callActivity
-        eventBus.on("element.dblclick", async (event: any) => {
-          const element = event.element;
-          if (element.type === "bpmn:CallActivity" && entityType === "service") {
-            const calledElement = element.businessObject.calledElement;
-            if (calledElement) {
-              const match = calledElement.match(/Process_Sub_(.+)$/);
-              if (match) {
-                const stepExternalId = match[1];
-                const { data, error } = await supabase
-                  .from("manual_service_steps")
-                  .select("subprocess_id")
-                  .eq("service_id", entityId)
-                  .maybeSingle();
-
-                if (error) console.warn("Lookup error", error);
-
-                if (data?.subprocess_id) {
-                  navigate(`/subprocess/${data.subprocess_id}`);
-                } else {
-                  toast.error("No linked subprocess found");
-                }
-              }
-            }
-          }
-        });
+        // Event listeners are registered in a separate effect after modeler is ready
 
         // Load BPMN data
         await loadBpmn();
@@ -263,6 +235,52 @@ export function BpmnGraphicalEditor({
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
   }, [entityId, entityType]);
+
+  // Register event listeners after modeler is ready
+  useEffect(() => {
+    const modeler = modelerRef.current;
+    if (!modeler) return;
+
+    const eventBus = modeler.get("eventBus") as any;
+
+    const onChanged = () => {
+      debouncedSave();
+    };
+
+    const onDblClick = async (event: any) => {
+      const element = event.element;
+      if (element.type === "bpmn:CallActivity" && entityType === "service") {
+        const calledElement = element.businessObject.calledElement;
+        if (calledElement) {
+          const match = calledElement.match(/Process_Sub_(.+)$/);
+          if (match) {
+            const stepExternalId = match[1];
+            const { data, error } = await supabase
+              .from("manual_service_steps")
+              .select("subprocess_id")
+              .eq("service_id", entityId)
+              .maybeSingle();
+
+            if (error) console.warn("Lookup error", error);
+
+            if (data?.subprocess_id) {
+              navigate(`/subprocess/${data.subprocess_id}`);
+            } else {
+              toast.error("No linked subprocess found");
+            }
+          }
+        }
+      }
+    };
+
+    eventBus.on("commandStack.changed", onChanged);
+    eventBus.on("element.dblclick", onDblClick);
+
+    return () => {
+      eventBus.off("commandStack.changed", onChanged);
+      eventBus.off("element.dblclick", onDblClick);
+    };
+  }, [debouncedSave, entityType, entityId, navigate]);
 
   // Zoom controls
   const handleZoomIn = () => {
@@ -359,13 +377,6 @@ export function BpmnGraphicalEditor({
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-[600px] bg-card rounded-lg border border-border">
-        <p className="text-muted-foreground">Loading BPMN editor...</p>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-4">

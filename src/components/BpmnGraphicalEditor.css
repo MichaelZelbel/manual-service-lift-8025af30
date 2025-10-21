@@ -3,7 +3,8 @@
 @import 'bpmn-js/dist/assets/bpmn-js.css';
 @import 'bpmn-js/dist/assets/bpmn-font/css/bpmn-embedded.css';
 
-/* Properties Panel styles */
+/* Properties Panel styles - using correct path */
+@import 'bpmn-js-properties-panel/dist/assets/element-templates.css';
 @import 'bpmn-js-properties-panel/dist/assets/properties-panel.css';
 
 /* Minimap styles */

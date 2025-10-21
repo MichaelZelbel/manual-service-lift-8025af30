@@ -1,9 +1,14 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import BpmnModeler from "bpmn-js/lib/Modeler";
-import propertiesPanelModule from "bpmn-js-properties-panel";
+import {
+  BpmnPropertiesPanelModule,
+  BpmnPropertiesProviderModule,
+  ZeebePropertiesProviderModule,
+} from "bpmn-js-properties-panel";
+// @ts-ignore - zeebe moddle doesn't have types
+import zeebeModdle from "zeebe-bpmn-moddle/resources/zeebe.json";
 import minimapModule from "diagram-js-minimap";
-import camundaModdleDescriptor from "camunda-bpmn-moddle/resources/camunda.json";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -189,11 +194,13 @@ export function BpmnGraphicalEditor({
           container: containerRef.current,
           propertiesPanel: { parent: propertiesPanelRef.current },
           additionalModules: [
-            propertiesPanelModule,
+            BpmnPropertiesPanelModule,
+            BpmnPropertiesProviderModule,
+            ZeebePropertiesProviderModule,
             minimapModule,
           ],
           moddleExtensions: {
-            camunda: camundaModdleDescriptor,
+            zeebe: zeebeModdle,
           },
           keyboard: { bindTo: document },
         });

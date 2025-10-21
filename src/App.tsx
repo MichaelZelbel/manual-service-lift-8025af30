@@ -7,6 +7,7 @@ import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import ProcessEditor from "./pages/ProcessEditor";
 import SubprocessEditor from "./pages/SubprocessEditor";
+import AdminTemplates from "./pages/AdminTemplates";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -22,6 +23,7 @@ const App = () => (
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/process/:id" element={<ProcessEditor />} />
           <Route path="/subprocess/:id" element={<SubprocessEditor />} />
+          <Route path="/admin/templates" element={<AdminTemplates />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

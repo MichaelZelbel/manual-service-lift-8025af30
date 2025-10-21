@@ -7,6 +7,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 import { ExportModal } from "@/components/ExportModal";
+import { useUserRole } from "@/hooks/useUserRole";
+import { Settings } from "lucide-react";
 
 interface User {
   bNumber: string;
@@ -34,6 +36,7 @@ const Dashboard = () => {
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [exportModalType, setExportModalType] = useState<"export" | "analysis">("export");
   const [selectedService, setSelectedService] = useState<ManualService | null>(null);
+  const { isAdmin } = useUserRole();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -125,6 +128,15 @@ const Dashboard = () => {
             <h1 className="text-2xl font-bold text-primary">Manual Service Lift</h1>
           </button>
           <div className="flex items-center gap-4">
+            {isAdmin && (
+              <Button
+                variant="outline"
+                onClick={() => navigate("/admin/templates")}
+              >
+                <Settings className="h-4 w-4 mr-2" />
+                Admin
+              </Button>
+            )}
             <div className="text-right">
               <p className="text-sm font-medium text-foreground">{user.name}</p>
               <p className="text-xs text-muted-foreground">

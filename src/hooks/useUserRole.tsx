@@ -24,8 +24,9 @@ export function useUserRole() {
       const user = JSON.parse(storedUser);
       
       // For prototype: mock user ID based on bNumber
+      // Alice (BH2856) is the admin user
       // In production, this would use auth.uid()
-      const mockUserId = user.bNumber === "B123456" ? "00000000-0000-0000-0000-000000000000" : null;
+      const mockUserId = user.bNumber === "BH2856" ? "00000000-0000-0000-0000-000000000000" : null;
       setUserId(mockUserId);
 
       if (!mockUserId) {

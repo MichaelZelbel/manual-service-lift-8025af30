@@ -31,11 +31,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-import "bpmn-js/dist/assets/diagram-js.css";
-import "bpmn-js/dist/assets/bpmn-js.css";
-import "bpmn-js/dist/assets/bpmn-font/css/bpmn-embedded.css";
-import "@bpmn-io/properties-panel/dist/assets/properties-panel.css";
-import "diagram-js-minimap/assets/diagram-js-minimap.css";
+import "./BpmnGraphicalEditor.css";
 
 interface BpmnGraphicalEditorProps {
   entityId: string;
@@ -82,36 +78,57 @@ export function BpmnGraphicalEditor({
 
   // Load BPMN from database
   const loadBpmn = useCallback(async () => {
+    console.log("BpmnEditor: loadBpmn called for", entityType, entityId);
     try {
       setLoading(true);
+      console.log("BpmnEditor: Fetching from table", tableName);
+      
       const { data, error } = await supabase
         .from(tableName)
         .select("original_bpmn_xml, edited_bpmn_xml")
         .eq("id", entityId)
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error("BpmnEditor: Database error", error);
+        throw error;
+      }
+
+      console.log("BpmnEditor: Data fetched", { 
+        hasOriginal: !!data.original_bpmn_xml, 
+        hasEdited: !!data.edited_bpmn_xml 
+      });
 
       const xmlToLoad = data.edited_bpmn_xml || data.original_bpmn_xml || EMPTY_BPMN;
       setOriginalXml(data.original_bpmn_xml || EMPTY_BPMN);
 
       if (modelerRef.current) {
+        console.log("BpmnEditor: Importing XML into modeler");
         await modelerRef.current.importXML(xmlToLoad);
+        console.log("BpmnEditor: XML imported successfully");
+        
         const canvas = modelerRef.current.get("canvas") as any;
         canvas.zoom("fit-viewport");
         toast.success("BPMN loaded successfully");
+      } else {
+        console.warn("BpmnEditor: Modeler ref not available");
       }
     } catch (error) {
-      console.error("Error loading BPMN:", error);
+      console.error("BpmnEditor: Error loading BPMN:", error);
       toast.error("Failed to load BPMN diagram");
       // Load empty diagram on error
       if (modelerRef.current) {
-        await modelerRef.current.importXML(EMPTY_BPMN);
+        try {
+          await modelerRef.current.importXML(EMPTY_BPMN);
+        } catch (e) {
+          console.error("BpmnEditor: Failed to load empty diagram", e);
+        }
       }
     } finally {
+      console.log("BpmnEditor: Setting loading to false");
       setLoading(false);
     }
-  }, [entityId, tableName]);
+  }, [entityId, tableName, entityType]);
 
   // Save BPMN to database (debounced)
   const saveBpmn = useCallback(async () => {
@@ -155,69 +172,90 @@ export function BpmnGraphicalEditor({
 
   // Initialize modeler
   useEffect(() => {
-    if (!containerRef.current || !propertiesPanelRef.current) return;
+    if (!containerRef.current || !propertiesPanelRef.current) {
+      console.log("BpmnEditor: Container refs not ready");
+      return;
+    }
 
-    const modeler = new BpmnModeler({
-      container: containerRef.current,
-      propertiesPanel: {
-        parent: propertiesPanelRef.current,
-      },
-      additionalModules: [
-        BpmnPropertiesPanelModule,
-        BpmnPropertiesProviderModule,
-        minimapModule,
-      ],
-      moddleExtensions: {
-        camunda: camundaModdleDescriptor,
-      },
-      keyboard: {
-        bindTo: document,
-      },
-    });
+    console.log("BpmnEditor: Initializing modeler");
 
-    modelerRef.current = modeler;
+    let modeler: BpmnModeler | null = null;
 
-    // Listen for changes
-    const eventBus = modeler.get("eventBus") as any;
-    eventBus.on("commandStack.changed", debouncedSave);
+    try {
+      modeler = new BpmnModeler({
+        container: containerRef.current,
+        propertiesPanel: {
+          parent: propertiesPanelRef.current,
+        },
+        additionalModules: [
+          BpmnPropertiesPanelModule,
+          BpmnPropertiesProviderModule,
+          minimapModule,
+        ],
+        moddleExtensions: {
+          camunda: camundaModdleDescriptor,
+        },
+        keyboard: {
+          bindTo: document,
+        },
+      });
 
-    // Handle double-click on callActivity for navigation
-    eventBus.on("element.dblclick", async (event: any) => {
-      const element = event.element;
-      if (element.type === "bpmn:CallActivity" && entityType === "service") {
-        const calledElement = element.businessObject.calledElement;
-        if (calledElement) {
-          // Extract step_external_id from calledElement (e.g., "Process_Sub_STEP-01")
-          const match = calledElement.match(/Process_Sub_(.+)$/);
-          if (match) {
-            const stepExternalId = match[1];
-            // Find subprocess_id from manual_service_steps
-            const { data } = await supabase
-              .from("manual_service_steps")
-              .select("subprocess_id")
-              .eq("service_id", entityId)
-              .ilike("name", `%${stepExternalId}%`)
-              .single();
+      modelerRef.current = modeler;
+      console.log("BpmnEditor: Modeler created successfully");
 
-            if (data?.subprocess_id) {
-              navigate(`/subprocess/${data.subprocess_id}`);
-            } else {
-              toast.error("No linked subprocess found");
+      // Listen for changes
+      const eventBus = modeler.get("eventBus") as any;
+      eventBus.on("commandStack.changed", debouncedSave);
+
+      // Handle double-click on callActivity for navigation
+      eventBus.on("element.dblclick", async (event: any) => {
+        const element = event.element;
+        if (element.type === "bpmn:CallActivity" && entityType === "service") {
+          const calledElement = element.businessObject.calledElement;
+          if (calledElement) {
+            // Extract step_external_id from calledElement (e.g., "Process_Sub_STEP-01")
+            const match = calledElement.match(/Process_Sub_(.+)$/);
+            if (match) {
+              const stepExternalId = match[1];
+              // Find subprocess_id from manual_service_steps
+              const { data } = await supabase
+                .from("manual_service_steps")
+                .select("subprocess_id")
+                .eq("service_id", entityId)
+                .ilike("name", `%${stepExternalId}%`)
+                .single();
+
+              if (data?.subprocess_id) {
+                navigate(`/subprocess/${data.subprocess_id}`);
+              } else {
+                toast.error("No linked subprocess found");
+              }
             }
           }
         }
-      }
-    });
+      });
 
-    loadBpmn();
+      console.log("BpmnEditor: Loading BPMN data");
+      // Use setTimeout to ensure DOM is fully ready
+      setTimeout(() => {
+        loadBpmn().catch(err => {
+          console.error("BpmnEditor: loadBpmn failed", err);
+        });
+      }, 100);
 
-    return () => {
-      modeler.destroy();
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-      }
-    };
-  }, [entityId, entityType, loadBpmn, debouncedSave, navigate]);
+      return () => {
+        console.log("BpmnEditor: Cleaning up");
+        modeler?.destroy();
+        if (saveTimeoutRef.current) {
+          clearTimeout(saveTimeoutRef.current);
+        }
+      };
+    } catch (error) {
+      console.error("BpmnEditor: Failed to initialize modeler", error);
+      toast.error("Failed to initialize BPMN editor");
+      setLoading(false);
+    }
+  }, [entityId, entityType, navigate]); // Remove loadBpmn and debouncedSave from deps
 
   // Zoom controls
   const handleZoomIn = () => {

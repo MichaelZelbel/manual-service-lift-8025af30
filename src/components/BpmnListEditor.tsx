@@ -202,64 +202,45 @@ export function BpmnListEditor({
     }
   }, []);
 
-  // Perform BPMN-aware swap - completely exchange connections
-  const performSwap = useCallback(async (indexA: number, indexB: number) => {
+  // Swap Y positions only - keeps connections intact
+  const performSwap = useCallback(async (elA: BpmnElement, elB: BpmnElement) => {
     if (!modeler) return;
-    const elA = elements[indexA];
-    const elB = elements[indexB];
+    
     try {
       const modeling = modeler.get("modeling") as any;
       const elementRegistry = modeler.get("elementRegistry") as any;
       const shapeA = elementRegistry.get(elA.id);
       const shapeB = elementRegistry.get(elB.id);
+      
       if (!shapeA || !shapeB) {
         throw new Error("Elements not found in registry");
       }
 
-      // Get current connections (clone arrays)
-      const incomingA = [...(shapeA.incoming || [])];
-      const outgoingA = [...(shapeA.outgoing || [])];
-      const incomingB = [...(shapeB.incoming || [])];
-      const outgoingB = [...(shapeB.outgoing || [])];
+      console.log(`Swapping Y positions: ${shapeA.id} (y=${shapeA.y}) <-> ${shapeB.id} (y=${shapeB.y})`);
 
-      // Swap ALL incoming connections: A's incoming becomes B's, B's incoming becomes A's
-      incomingA.forEach((flow: any) => {
-        modeling.reconnectEnd(flow, shapeB, flow.waypoints[flow.waypoints.length - 1]);
-      });
-      incomingB.forEach((flow: any) => {
-        modeling.reconnectEnd(flow, shapeA, flow.waypoints[flow.waypoints.length - 1]);
-      });
+      // Simply swap Y positions, keep X the same
+      const yA = shapeA.y;
+      const yB = shapeB.y;
+      
+      modeling.moveElements([shapeA], { x: 0, y: yB - yA });
+      modeling.moveElements([shapeB], { x: 0, y: yA - yB });
 
-      // Swap ALL outgoing connections: A's outgoing becomes B's, B's outgoing becomes A's
-      outgoingA.forEach((flow: any) => {
-        modeling.reconnectStart(flow, shapeB, flow.waypoints[0]);
-      });
-      outgoingB.forEach((flow: any) => {
-        modeling.reconnectStart(flow, shapeA, flow.waypoints[0]);
-      });
-
-      // Swap positions
-      const deltaAB = {
-        x: shapeB.x - shapeA.x,
-        y: shapeB.y - shapeA.y
-      };
-      const deltaBA = {
-        x: shapeA.x - shapeB.x,
-        y: shapeA.y - shapeB.y
-      };
-      modeling.moveElements([shapeA], deltaAB);
-      modeling.moveElements([shapeB], deltaBA);
-
-      // Re-parse to update local state with new connections
+      // Re-parse to update local state
       parseElements(modeler);
-      toast.success(`Swapped '${elA.name}' with '${elB.name}'`);
+      toast.success(`Reordered '${elA.name}' and '${elB.name}'`);
     } catch (error) {
       console.error("Error performing swap:", error);
-      toast.error("Swap failed");
-      // Re-parse to show current state
+      toast.error("Reorder failed");
       parseElements(modeler);
     }
-  }, [modeler, elements, parseElements]);
+  }, [modeler, parseElements]);
+
+  // Filtered elements
+  const filteredElements = (() => {
+    if (!searchTerm) return elements;
+    const term = searchTerm.toLowerCase();
+    return elements.filter((el: BpmnElement) => el.name.toLowerCase().includes(term) || el.type.toLowerCase().includes(term));
+  })();
 
   // Handle drag end
   const handleDragEnd = async (event: DragEndEvent) => {
@@ -269,14 +250,16 @@ export function BpmnListEditor({
     } = event;
     if (!over || active.id === over.id) return;
     console.log("Drag ended:", active.id, "->", over.id);
-    const oldIndex = filteredElements.findIndex(el => el.id === active.id);
-    const newIndex = filteredElements.findIndex(el => el.id === over.id);
-    console.log("Indices:", oldIndex, newIndex);
-    if (oldIndex === -1 || newIndex === -1) {
+    
+    const elA = filteredElements.find(el => el.id === active.id);
+    const elB = filteredElements.find(el => el.id === over.id);
+    
+    if (!elA || !elB) {
       toast.error("Could not find elements to swap");
       return;
     }
-    await performSwap(oldIndex, newIndex);
+    
+    await performSwap(elA, elB);
   };
 
   // Handle Edit Subprocess - Simplified to avoid type issues
@@ -296,13 +279,6 @@ export function BpmnListEditor({
       toast.info("Nothing to undo");
     }
   }, [modeler, parseElements]);
-
-  // Filtered elements
-  const filteredElements = (() => {
-    if (!searchTerm) return elements;
-    const term = searchTerm.toLowerCase();
-    return elements.filter((el: BpmnElement) => el.name.toLowerCase().includes(term) || el.type.toLowerCase().includes(term));
-  })();
   if (loading) {
     return <Card className="p-6">
         <p className="text-muted-foreground">Loading BPMN diagram...</p>

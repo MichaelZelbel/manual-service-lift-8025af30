@@ -392,16 +392,6 @@ export function BpmnGraphicalEditor({
             <Download className="h-4 w-4 mr-2" />
             Export
           </Button>
-          <Button variant="outline" size="sm" onClick={() => setShowResetDialog(true)}>
-            <RotateCcw className="h-4 w-4 mr-2" />
-            Reset to AI
-          </Button>
-          <Button size="sm" onClick={saveBpmn}>
-            <Save className="h-4 w-4 mr-2" />
-            Save
-          </Button>
-          
-          
         </div>
       </div>
 

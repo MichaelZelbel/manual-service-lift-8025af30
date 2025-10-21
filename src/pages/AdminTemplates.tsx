@@ -43,6 +43,21 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
+// Template name to filename mapping
+const TEMPLATE_MAP: Record<string, string> = {
+  FIRST_STEP_SINGLE: 'first-step-single-path.form',
+  FIRST_STEP_MULTI: 'first-step-multi-path.form',
+  NEXT_STEP_SINGLE: 'next-step-single-path.form',
+  NEXT_STEP_MULTI: 'next-step-multi-path.form',
+};
+
+const DISPLAY_NAMES: Record<string, string> = {
+  FIRST_STEP_SINGLE: 'First Step, Single Path',
+  FIRST_STEP_MULTI: 'First Step, Multi Path',
+  NEXT_STEP_SINGLE: 'Next Step, Single Path',
+  NEXT_STEP_MULTI: 'Next Step, Multi Path',
+};
+
 interface FormTemplate {
   id: string;
   template_name: string;
@@ -102,39 +117,56 @@ export default function AdminTemplates() {
       return;
     }
 
+    // Validate file size (max 2MB)
+    if (uploadFile.size > 2 * 1024 * 1024) {
+      toast.error("File too large (max 2 MB)");
+      return;
+    }
+
+    // Validate file type
+    const fileType = uploadFile.type;
+    if (fileType !== 'application/json' && fileType !== 'text/plain') {
+      toast.error("Unsupported file type. Upload a Camunda Webform JSON (.form/.json)");
+      return;
+    }
+
     setUploading(true);
 
     try {
       // Find the template record
-      const template = templates.find((t) => t.template_name === selectedTemplate);
+      const template = templates.find((t) => DISPLAY_NAMES[t.template_name] === selectedTemplate);
       if (!template) {
         throw new Error("Template not found");
       }
 
-      // Upload file to storage with user ID folder
-      const filePath = `${userId}/${template.file_name}`;
-      const { error: uploadError } = await supabase.storage
-        .from("form_templates")
-        .upload(filePath, uploadFile, {
-          upsert: true,
-          contentType: uploadFile.type || "application/json",
-        });
+      // Get current user info
+      const storedUser = localStorage.getItem("currentUser");
+      const user = storedUser ? JSON.parse(storedUser) : null;
+      const uploadedBy = user ? `${user.name} (${user.bNumber})` : "Unknown";
 
-      if (uploadError) throw uploadError;
+      // Create FormData
+      const formData = new FormData();
+      formData.append('template_name', template.template_name);
+      formData.append('file', uploadFile);
+      formData.append('uploaded_by', uploadedBy);
 
-      // Update template metadata
-      const { error: updateError } = await supabase
-        .from("form_templates")
-        .update({
-          last_updated: new Date().toISOString(),
-          uploaded_by: userId,
-        })
-        .eq("id", template.id);
+      console.log('Uploading template:', template.template_name);
 
-      if (updateError) throw updateError;
+      // Call edge function
+      const { data, error } = await supabase.functions.invoke('upload-template', {
+        body: formData,
+      });
+
+      if (error) {
+        throw new Error(error.message || 'Upload failed');
+      }
+
+      if (!data.ok) {
+        throw new Error(data.error || 'Upload failed');
+      }
 
       setUploadSuccess(true);
-      toast.success(`Template "${selectedTemplate}" updated successfully`);
+      toast.success(`Template "${data.display_name}" updated successfully`);
 
       // Refresh templates
       await fetchTemplates();
@@ -148,7 +180,7 @@ export default function AdminTemplates() {
       }, 1500);
     } catch (error) {
       console.error("Error uploading template:", error);
-      toast.error("Failed to upload template");
+      toast.error(`Upload failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setUploading(false);
     }
@@ -161,27 +193,26 @@ export default function AdminTemplates() {
         return;
       }
 
-      const filePath = `${template.uploaded_by}/${template.file_name}`;
-      const { data, error } = await supabase.storage
-        .from("form_templates")
-        .download(filePath);
+      console.log('Downloading template:', template.template_name);
 
-      if (error) throw error;
+      // Build URL with query params
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const downloadUrl = `${supabaseUrl}/functions/v1/download-template?template_name=${encodeURIComponent(template.template_name)}`;
 
-      // Create download link
-      const url = URL.createObjectURL(data);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = template.file_name;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      // Fetch signed URL
+      const response = await fetch(downloadUrl);
+      const data = await response.json();
 
-      toast.success("Template downloaded");
+      if (!response.ok || !data.ok || !data.signed_url) {
+        throw new Error(data.error || 'Failed to generate download URL');
+      }
+
+      // Open signed URL in new tab
+      window.open(data.signed_url, '_blank');
+      toast.success("Template download started");
     } catch (error) {
       console.error("Error downloading template:", error);
-      toast.error("Failed to download template");
+      toast.error(`Download failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
@@ -189,29 +220,26 @@ export default function AdminTemplates() {
     if (!templateToDelete || !templateToDelete.uploaded_by) return;
 
     try {
-      const filePath = `${templateToDelete.uploaded_by}/${templateToDelete.file_name}`;
-      const { error: storageError } = await supabase.storage
-        .from("form_templates")
-        .remove([filePath]);
+      console.log('Deleting template:', templateToDelete.template_name);
 
-      if (storageError) throw storageError;
+      // Call edge function
+      const { data, error } = await supabase.functions.invoke('delete-template', {
+        body: { template_name: templateToDelete.template_name },
+      });
 
-      // Update template metadata to clear uploaded_by
-      const { error: updateError } = await supabase
-        .from("form_templates")
-        .update({
-          uploaded_by: null,
-          last_updated: new Date().toISOString(),
-        })
-        .eq("id", templateToDelete.id);
+      if (error) {
+        throw new Error(error.message || 'Delete failed');
+      }
 
-      if (updateError) throw updateError;
+      if (!data.ok) {
+        throw new Error(data.error || 'Delete failed');
+      }
 
       toast.success("Template deleted successfully");
       await fetchTemplates();
     } catch (error) {
       console.error("Error deleting template:", error);
-      toast.error("Failed to delete template");
+      toast.error(`Delete failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setDeleteDialogOpen(false);
       setTemplateToDelete(null);
@@ -278,7 +306,7 @@ export default function AdminTemplates() {
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <FileText className="h-4 w-4 text-muted-foreground" />
-                        <span className="font-medium">{template.template_name}</span>
+                        <span className="font-medium">{DISPLAY_NAMES[template.template_name]}</span>
                       </div>
                     </TableCell>
                     <TableCell className="text-muted-foreground">
@@ -297,11 +325,19 @@ export default function AdminTemplates() {
                           variant="outline"
                           size="sm"
                           onClick={() => {
-                            setSelectedTemplate(template.template_name);
+                            setSelectedTemplate(DISPLAY_NAMES[template.template_name]);
                             setUploadModalOpen(true);
                           }}
+                          disabled={uploading}
                         >
-                          Replace
+                          {uploading && selectedTemplate === DISPLAY_NAMES[template.template_name] ? (
+                            <>
+                              <span className="animate-spin mr-2">⏳</span>
+                              Uploading...
+                            </>
+                          ) : (
+                            "Replace"
+                          )}
                         </Button>
                         <Button
                           variant="outline"
@@ -359,8 +395,8 @@ export default function AdminTemplates() {
                   </SelectTrigger>
                   <SelectContent>
                     {templates.map((template) => (
-                      <SelectItem key={template.id} value={template.template_name}>
-                        {template.template_name}
+                      <SelectItem key={template.id} value={DISPLAY_NAMES[template.template_name]}>
+                        {DISPLAY_NAMES[template.template_name]}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -412,7 +448,7 @@ export default function AdminTemplates() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Template File?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will remove the uploaded file for "{templateToDelete?.template_name}".
+              This will remove the uploaded file for "{templateToDelete && DISPLAY_NAMES[templateToDelete.template_name]}".
               The template slot will remain and can be re-uploaded later.
             </AlertDialogDescription>
           </AlertDialogHeader>

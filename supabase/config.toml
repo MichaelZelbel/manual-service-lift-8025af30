@@ -1,1 +1,10 @@
 project_id = "nqzreyydyirslxdtfuna"
+
+[functions.upload-template]
+verify_jwt = false
+
+[functions.download-template]
+verify_jwt = false
+
+[functions.delete-template]
+verify_jwt = false

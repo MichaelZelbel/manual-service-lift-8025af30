@@ -189,33 +189,51 @@ export function BpmnListEditor({
   useEffect(() => {
     const initModeler = async () => {
       try {
+        console.log("BpmnListEditor: Initializing for", entityType, entityId);
         setLoading(true);
+        
+        // Create headless modeler without keyboard binding
         const mod = new BpmnModeler({
-          container: document.createElement("div"), // Headless
+          container: document.createElement("div"),
         });
         setModeler(mod);
+        console.log("BpmnListEditor: Modeler created");
 
         // Load BPMN
+        console.log("BpmnListEditor: Loading from table", tableName);
         const { data, error } = await supabase
           .from(tableName)
           .select("original_bpmn_xml, edited_bpmn_xml")
           .eq("id", entityId)
           .single();
 
-        if (error) throw error;
+        if (error) {
+          console.error("BpmnListEditor: Database error", error);
+          throw error;
+        }
+
+        console.log("BpmnListEditor: Data fetched", {
+          hasOriginal: !!data?.original_bpmn_xml,
+          hasEdited: !!data?.edited_bpmn_xml
+        });
 
         const xmlToLoad =
           data.edited_bpmn_xml || data.original_bpmn_xml || "";
         if (!xmlToLoad) {
+          console.error("BpmnListEditor: No XML data found");
           toast.error("No BPMN diagram found");
           setLoading(false);
           return;
         }
 
+        console.log("BpmnListEditor: Importing XML, length:", xmlToLoad.length);
         await mod.importXML(xmlToLoad);
+        console.log("BpmnListEditor: XML imported successfully");
+        
         parseElements(mod);
+        console.log("BpmnListEditor: Elements parsed");
       } catch (error) {
-        console.error("Error initializing modeler:", error);
+        console.error("BpmnListEditor: Error initializing modeler:", error);
         toast.error("Failed to load BPMN diagram");
       } finally {
         setLoading(false);
@@ -232,8 +250,10 @@ export function BpmnListEditor({
   // Parse elements from BPMN
   const parseElements = useCallback((mod: BpmnModeler) => {
     try {
+      console.log("BpmnListEditor: Parsing elements...");
       const elementRegistry = mod.get("elementRegistry") as any;
       const allElements = elementRegistry.getAll();
+      console.log("BpmnListEditor: Total elements found:", allElements.length);
 
       const flowNodes = allElements.filter((el: any) => {
         const type = el.type;
@@ -246,6 +266,8 @@ export function BpmnListEditor({
           type === "bpmn:InclusiveGateway";
         return isTask || isGateway;
       });
+
+      console.log("BpmnListEditor: Flow nodes (tasks + gateways):", flowNodes.length);
 
       // Sort by DFS order (simple y-coordinate for now)
       flowNodes.sort((a: any, b: any) => {
@@ -269,9 +291,14 @@ export function BpmnListEditor({
         },
       }));
 
+      console.log("BpmnListEditor: Parsed elements:", parsed.length);
+      parsed.forEach((el, idx) => {
+        console.log(`  ${idx + 1}. ${el.name} (${el.type})`);
+      });
+
       setElements(parsed);
     } catch (error) {
-      console.error("Error parsing elements:", error);
+      console.error("BpmnListEditor: Error parsing elements:", error);
       toast.error("Failed to parse BPMN elements");
     }
   }, []);

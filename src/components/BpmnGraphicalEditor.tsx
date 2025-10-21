@@ -167,9 +167,6 @@ export function BpmnGraphicalEditor({
           additionalModules: [BpmnPropertiesPanelModule, BpmnPropertiesProviderModule, ZeebePropertiesProviderModule, minimapModule],
           moddleExtensions: {
             zeebe: zeebeModdle
-          },
-          keyboard: {
-            bindTo: document
           }
         });
         modelerRef.current = modeler;

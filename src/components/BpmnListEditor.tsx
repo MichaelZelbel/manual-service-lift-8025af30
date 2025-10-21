@@ -406,7 +406,7 @@ export function BpmnListEditor({
         }
       }
     },
-    [modeler, elements, parseElements, tableName, entityId, onSave]
+    [modeler, elements, parseElements, tableName, entityId]
   );
 
   // Handle drag end

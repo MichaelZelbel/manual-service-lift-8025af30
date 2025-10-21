@@ -331,11 +331,6 @@ export function BpmnListEditor({
           throw new Error("Elements not found in registry");
         }
 
-        // Set localStorage first to prevent polling from reloading during save
-        const timestamp = Date.now().toString();
-        localStorage.setItem(`bpmn_updated_${entityId}`, timestamp);
-        localStorage.setItem(`bpmn_my_save_${entityId}_list`, timestamp);
-
         // Get current connections (clone arrays)
         const incomingA = [...(shapeA.incoming || [])];
         const outgoingA = [...(shapeA.outgoing || [])];
@@ -371,42 +366,18 @@ export function BpmnListEditor({
         modeling.moveElements([shapeA], deltaAB);
         modeling.moveElements([shapeB], deltaBA);
 
-        // Save immediately (not debounced) to prevent polling from reloading old version
-        const { xml } = await modeler.saveXML({ format: true });
-        if (!xml || !xml.includes("<bpmn:definitions")) {
-          throw new Error("Invalid BPMN XML");
-        }
-
-        const { error } = await supabase
-          .from(tableName)
-          .update({ edited_bpmn_xml: xml })
-          .eq("id", entityId);
-
-        if (error) throw error;
-
         // Re-parse to update local state with new connections
         parseElements(modeler);
 
         toast.success(`Swapped '${elA.name}' with '${elB.name}'`);
       } catch (error) {
         console.error("Error performing swap:", error);
-        toast.error("Swap failed - reverting");
-        // Reload from database on error
-        const { data } = await supabase
-          .from(tableName)
-          .select("edited_bpmn_xml, original_bpmn_xml")
-          .eq("id", entityId)
-          .single();
-        if (data) {
-          const xml = data.edited_bpmn_xml || data.original_bpmn_xml;
-          if (xml) {
-            await modeler.importXML(xml);
-            parseElements(modeler);
-          }
-        }
+        toast.error("Swap failed");
+        // Re-parse to show current state
+        parseElements(modeler);
       }
     },
-    [modeler, elements, parseElements, tableName, entityId]
+    [modeler, elements, parseElements]
   );
 
   // Handle drag end

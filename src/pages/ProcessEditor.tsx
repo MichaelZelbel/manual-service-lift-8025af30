@@ -22,7 +22,7 @@ export default function ProcessEditor() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [exportModalOpen, setExportModalOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState("graphical");
+  const [activeTab, setActiveTab] = useState("list");
 
   const bpmn = useBpmnModeler({
     entityId: id!,
@@ -165,10 +165,9 @@ export default function ProcessEditor() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="graphical">Graphical Editor</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="list">List Editor</TabsTrigger>
-            <TabsTrigger value="subprocesses">Subprocesses</TabsTrigger>
+            <TabsTrigger value="graphical">Graphical Editor</TabsTrigger>
           </TabsList>
 
           <TabsContent value="graphical" className="space-y-4">
@@ -185,10 +184,6 @@ export default function ProcessEditor() {
                 entityType="service"
               />
             )}
-          </TabsContent>
-
-          <TabsContent value="subprocesses" className="space-y-4">
-            <SubprocessList serviceId={id!} />
           </TabsContent>
         </Tabs>
 

@@ -85,8 +85,7 @@ const Dashboard = () => {
   };
 
   const handleEditProcess = (id: string) => {
-    toast.info("Opening process editor...");
-    // TODO: Navigate to /process/:id
+    navigate(`/process/${id}`);
   };
 
   const handleExport = (serviceName: string) => {

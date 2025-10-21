@@ -5,8 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
-import { ArrowLeft, RotateCcw, Save, GripVertical } from "lucide-react";
+import { ArrowLeft, RotateCcw, Save, GripVertical, Download, BarChart3 } from "lucide-react";
 import { toast } from "sonner";
+import { ExportModal } from "@/components/ExportModal";
 
 import {
   DndContext,
@@ -151,6 +152,8 @@ export default function ProcessEditor() {
   const [showResetDialog, setShowResetDialog] = useState(false);
   const [selectedStep, setSelectedStep] = useState<ProcessStep | null>(null);
   const [activeTab, setActiveTab] = useState("list");
+  const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [exportModalType, setExportModalType] = useState<"export" | "analysis">("export");
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -282,6 +285,11 @@ export default function ProcessEditor() {
     navigate(`/subprocess/${subprocessId}`);
   };
 
+  const handleOpenExportModal = (type: "export" | "analysis") => {
+    setExportModalType(type);
+    setExportModalOpen(true);
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -322,6 +330,20 @@ export default function ProcessEditor() {
               </div>
             </div>
             <div className="flex items-center gap-3">
+              <Button
+                variant="outline"
+                onClick={() => handleOpenExportModal("export")}
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Export BPMN
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => handleOpenExportModal("analysis")}
+              >
+                <BarChart3 className="h-4 w-4 mr-2" />
+                Analysis
+              </Button>
               <Button
                 variant="outline"
                 onClick={() => setShowResetDialog(true)}
@@ -449,6 +471,23 @@ export default function ProcessEditor() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Export Modal */}
+      {service && (
+        <ExportModal
+          open={exportModalOpen}
+          onOpenChange={(open) => {
+            setExportModalOpen(open);
+            if (!open) {
+              // Refresh service data after modal closes
+              fetchServiceAndSteps();
+            }
+          }}
+          type={exportModalType}
+          serviceId={service.id}
+          serviceName={service.name}
+        />
+      )}
     </div>
   );
 }

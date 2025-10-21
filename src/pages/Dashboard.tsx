@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
+import { ExportModal } from "@/components/ExportModal";
 
 interface User {
   bNumber: string;
@@ -30,6 +31,9 @@ const Dashboard = () => {
   const [filteredServices, setFilteredServices] = useState<ManualService[]>([]);
   const [filterText, setFilterText] = useState("");
   const [loading, setLoading] = useState(true);
+  const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [exportModalType, setExportModalType] = useState<"export" | "analysis">("export");
+  const [selectedService, setSelectedService] = useState<ManualService | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -88,12 +92,16 @@ const Dashboard = () => {
     navigate(`/process/${id}`);
   };
 
-  const handleExport = (serviceName: string) => {
-    toast.success(`Export started for "${serviceName}"`);
+  const handleExport = (service: ManualService) => {
+    setSelectedService(service);
+    setExportModalType("export");
+    setExportModalOpen(true);
   };
 
-  const handleAnalysis = (serviceName: string) => {
-    toast.info(`Backend analysis in progress for "${serviceName}"`);
+  const handleAnalysis = (service: ManualService) => {
+    setSelectedService(service);
+    setExportModalType("analysis");
+    setExportModalOpen(true);
   };
 
   const formatDate = (dateString: string | null) => {
@@ -200,7 +208,7 @@ const Dashboard = () => {
                       Edit Process
                     </Button>
                     <Button
-                      onClick={() => handleExport(service.name)}
+                      onClick={() => handleExport(service)}
                       variant="outline"
                       className="w-full"
                       size="sm"
@@ -208,7 +216,7 @@ const Dashboard = () => {
                       Export BPMN & Forms
                     </Button>
                     <Button
-                      onClick={() => handleAnalysis(service.name)}
+                      onClick={() => handleAnalysis(service)}
                       variant="secondary"
                       className="w-full"
                       size="sm"
@@ -222,6 +230,23 @@ const Dashboard = () => {
           </div>
         )}
       </main>
+
+      {/* Export Modal */}
+      {selectedService && (
+        <ExportModal
+          open={exportModalOpen}
+          onOpenChange={(open) => {
+            setExportModalOpen(open);
+            if (!open) {
+              // Refresh services after modal closes to show updated timestamps
+              fetchServices();
+            }
+          }}
+          type={exportModalType}
+          serviceId={selectedService.id}
+          serviceName={selectedService.name}
+        />
+      )}
     </div>
   );
 };

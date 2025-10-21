@@ -14,6 +14,44 @@ export type Database = {
   }
   public: {
     Tables: {
+      exports: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          download_url: string | null
+          id: string
+          service_id: string
+          status: string
+          type: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          download_url?: string | null
+          id?: string
+          service_id: string
+          status?: string
+          type: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          download_url?: string | null
+          id?: string
+          service_id?: string
+          status?: string
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exports_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "manual_services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       manual_service_steps: {
         Row: {
           connections: Json | null

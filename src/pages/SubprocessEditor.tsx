@@ -6,8 +6,9 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
-import { ArrowLeft, RotateCcw, Save, GripVertical, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, RotateCcw, Save, GripVertical, Plus, Trash2, Download, BarChart3 } from "lucide-react";
 import { toast } from "sonner";
+import { ExportModal } from "@/components/ExportModal";
 import {
   DndContext,
   closestCenter,
@@ -48,6 +49,11 @@ import { Label } from "@/components/ui/label";
 interface Subprocess {
   id: string;
   service_id: string;
+  name: string;
+}
+
+interface ManualService {
+  id: string;
   name: string;
 }
 
@@ -146,12 +152,15 @@ export default function SubprocessEditor() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [subprocess, setSubprocess] = useState<Subprocess | null>(null);
+  const [service, setService] = useState<ManualService | null>(null);
   const [steps, setSteps] = useState<SubprocessStep[]>([]);
   const [loading, setLoading] = useState(true);
   const [showResetDialog, setShowResetDialog] = useState(false);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [selectedStep, setSelectedStep] = useState<SubprocessStep | null>(null);
+  const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [exportModalType, setExportModalType] = useState<"export" | "analysis">("export");
   const [stepToDelete, setStepToDelete] = useState<SubprocessStep | null>(null);
   const [activeTab, setActiveTab] = useState("list");
   const [newStepName, setNewStepName] = useState("");
@@ -183,6 +192,16 @@ export default function SubprocessEditor() {
 
       if (subprocessError) throw subprocessError;
       setSubprocess(subprocessData);
+
+      // Fetch service details
+      const { data: serviceData, error: serviceError } = await supabase
+        .from("manual_services")
+        .select("id, name")
+        .eq("id", subprocessData.service_id)
+        .single();
+
+      if (serviceError) throw serviceError;
+      setService(serviceData);
 
       // Fetch steps
       const { data: stepsData, error: stepsError } = await supabase
@@ -393,10 +412,15 @@ export default function SubprocessEditor() {
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <Button
-                variant="outline"
-                onClick={() => setShowResetDialog(true)}
-              >
+              <Button variant="outline" onClick={() => { setExportModalType("export"); setExportModalOpen(true); }}>
+                <Download className="h-4 w-4 mr-2" />
+                Export BPMN
+              </Button>
+              <Button variant="outline" onClick={() => { setExportModalType("analysis"); setExportModalOpen(true); }}>
+                <BarChart3 className="h-4 w-4 mr-2" />
+                Analysis
+              </Button>
+              <Button variant="outline" onClick={() => setShowResetDialog(true)}>
                 <RotateCcw className="h-4 w-4 mr-2" />
                 Reset to AI Version
               </Button>
@@ -597,6 +621,17 @@ export default function SubprocessEditor() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Export Modal */}
+      {service && (
+        <ExportModal
+          open={exportModalOpen}
+          onOpenChange={setExportModalOpen}
+          type={exportModalType}
+          serviceId={service.id}
+          serviceName={service.name}
+        />
+      )}
     </div>
   );
 }

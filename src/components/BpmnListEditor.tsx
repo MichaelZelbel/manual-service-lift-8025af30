@@ -9,40 +9,11 @@ import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import {
-  GripVertical,
-  FileText,
-  GitBranch,
-  Share2,
-  Box,
-  Undo2,
-} from "lucide-react";
-import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  DragEndEvent,
-} from "@dnd-kit/core";
-import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  useSortable,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
+import { GripVertical, FileText, GitBranch, Share2, Box, Undo2 } from "lucide-react";
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from "@dnd-kit/core";
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-
-
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 interface BpmnElement {
   id: string;
   name: string;
@@ -50,27 +21,29 @@ interface BpmnElement {
   businessObject: any;
   incoming: any[];
   outgoing: any[];
-  bounds: { x: number; y: number; width: number; height: number };
+  bounds: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
 }
-
 interface BpmnListEditorProps {
   modeler: BpmnModeler;
   entityId: string;
   entityType: "service" | "subprocess";
 }
-
 interface SortableElementProps {
   element: BpmnElement;
   onShowConnections: (element: BpmnElement) => void;
   onEditSubprocess: (elementId: string) => void;
   canEditSubprocess: boolean;
 }
-
 function SortableElement({
   element,
   onShowConnections,
   onEditSubprocess,
-  canEditSubprocess,
+  canEditSubprocess
 }: SortableElementProps) {
   const {
     attributes,
@@ -78,21 +51,20 @@ function SortableElement({
     setNodeRef,
     transform,
     transition,
-    isDragging,
-  } = useSortable({ id: element.id });
-
+    isDragging
+  } = useSortable({
+    id: element.id
+  });
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.5 : 1,
+    opacity: isDragging ? 0.5 : 1
   };
-
   const getIcon = () => {
     if (element.type.includes("Task")) return <FileText className="h-5 w-5" />;
     if (element.type.includes("Gateway")) return <GitBranch className="h-5 w-5" />;
     return <Box className="h-5 w-5" />;
   };
-
   const getTypeBadge = () => {
     if (element.type === "bpmn:UserTask") return "User Task";
     if (element.type === "bpmn:ServiceTask") return "Service Task";
@@ -102,20 +74,10 @@ function SortableElement({
     if (element.type === "bpmn:InclusiveGateway") return "OR Gateway";
     return element.type.replace("bpmn:", "");
   };
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className="bg-card p-4 rounded-lg border border-border hover:border-primary hover:shadow-md transition-all duration-200 cursor-default"
-    >
+  return <div ref={setNodeRef} style={style} className="bg-card p-4 rounded-lg border border-border hover:border-primary hover:shadow-md transition-all duration-200 cursor-default">
       <div className="flex items-center gap-3">
         {/* Drag Handle */}
-        <div
-          {...attributes}
-          {...listeners}
-          className="flex-shrink-0 cursor-grab active:cursor-grabbing hover:text-primary transition-colors"
-        >
+        <div {...attributes} {...listeners} className="flex-shrink-0 cursor-grab active:cursor-grabbing hover:text-primary transition-colors">
           <GripVertical className="h-5 w-5 text-[#A0A0A0]" />
         </div>
 
@@ -140,48 +102,31 @@ function SortableElement({
 
         {/* Actions */}
         <div className="flex gap-2 flex-shrink-0">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onShowConnections(element)}
-          >
+          <Button variant="outline" size="sm" onClick={() => onShowConnections(element)}>
             <Share2 className="h-4 w-4 mr-1" />
             Connections
           </Button>
-          {canEditSubprocess && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onEditSubprocess(element.id)}
-            >
+          {canEditSubprocess && <Button variant="outline" size="sm" onClick={() => onEditSubprocess(element.id)}>
               Edit Subprocess
-            </Button>
-          )}
+            </Button>}
         </div>
       </div>
-    </div>
-  );
+    </div>;
 }
-
 export function BpmnListEditor({
   modeler,
   entityId,
-  entityType,
+  entityType
 }: BpmnListEditorProps) {
   const navigate = useNavigate();
   const [elements, setElements] = useState<BpmnElement[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedElement, setSelectedElement] = useState<BpmnElement | null>(null);
-
   const tableName = entityType === "service" ? "manual_services" : "subprocesses";
-
-  const sensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  );
+  const sensors = useSensors(useSensor(PointerSensor), useSensor(KeyboardSensor, {
+    coordinateGetter: sortableKeyboardCoordinates
+  }));
 
   // Parse elements on mount
   useEffect(() => {
@@ -209,33 +154,21 @@ export function BpmnListEditor({
       allElements.forEach((el: any, idx: number) => {
         console.log(`  Element ${idx}: type="${el.type}", id="${el.id}", name="${el.businessObject?.name || 'N/A'}"`);
       });
-
       const flowNodes = allElements.filter((el: any) => {
         const type = el.type as string | undefined;
         if (!type) return false;
         if (el.labelTarget || type === 'label') return false; // exclude labels
 
-        const isIncludedTask =
-          type === 'bpmn:Task' ||
-          type === 'bpmn:UserTask' ||
-          type === 'bpmn:ServiceTask' ||
-          type === 'bpmn:CallActivity'; // include CallActivity for main process steps
+        const isIncludedTask = type === 'bpmn:Task' || type === 'bpmn:UserTask' || type === 'bpmn:ServiceTask' || type === 'bpmn:CallActivity'; // include CallActivity for main process steps
 
-        const isIncludedGateway =
-          type === 'bpmn:ExclusiveGateway' ||
-          type === 'bpmn:ParallelGateway' ||
-          type === 'bpmn:EventBasedGateway' ||
-          type === 'bpmn:InclusiveGateway';
-
+        const isIncludedGateway = type === 'bpmn:ExclusiveGateway' || type === 'bpmn:ParallelGateway' || type === 'bpmn:EventBasedGateway' || type === 'bpmn:InclusiveGateway';
         const isExcludedEvent = type === 'bpmn:StartEvent' || type === 'bpmn:EndEvent';
-
         const keep = (isIncludedTask || isIncludedGateway) && !isExcludedEvent;
         if (keep) {
           console.log('  ✓ Matched:', type, el.id);
         }
         return keep;
       });
-
       console.log("BpmnListEditor: Flow nodes (tasks + gateways):", flowNodes.length);
 
       // Sort by y-coordinate
@@ -244,7 +177,6 @@ export function BpmnListEditor({
         const bY = b.y || 0;
         return aY - bY;
       });
-
       const parsed: BpmnElement[] = flowNodes.map((el: any) => ({
         id: el.id,
         name: el.businessObject.name || el.id,
@@ -256,15 +188,13 @@ export function BpmnListEditor({
           x: el.x || 0,
           y: el.y || 0,
           width: el.width || 100,
-          height: el.height || 80,
-        },
+          height: el.height || 80
+        }
       }));
-
       console.log("BpmnListEditor: Parsed elements:", parsed.length);
       parsed.forEach((el, idx) => {
         console.log(`  ${idx + 1}. ${el.name} (${el.type})`);
       });
-
       setElements(parsed);
     } catch (error) {
       console.error("BpmnListEditor: Error parsing elements:", error);
@@ -273,90 +203,79 @@ export function BpmnListEditor({
   }, []);
 
   // Perform BPMN-aware swap - completely exchange connections
-  const performSwap = useCallback(
-    async (indexA: number, indexB: number) => {
-      if (!modeler) return;
-
-      const elA = elements[indexA];
-      const elB = elements[indexB];
-
-      try {
-        const modeling = modeler.get("modeling") as any;
-        const elementRegistry = modeler.get("elementRegistry") as any;
-
-        const shapeA = elementRegistry.get(elA.id);
-        const shapeB = elementRegistry.get(elB.id);
-
-        if (!shapeA || !shapeB) {
-          throw new Error("Elements not found in registry");
-        }
-
-        // Get current connections (clone arrays)
-        const incomingA = [...(shapeA.incoming || [])];
-        const outgoingA = [...(shapeA.outgoing || [])];
-        const incomingB = [...(shapeB.incoming || [])];
-        const outgoingB = [...(shapeB.outgoing || [])];
-
-        // Swap ALL incoming connections: A's incoming becomes B's, B's incoming becomes A's
-        incomingA.forEach((flow: any) => {
-          modeling.reconnectEnd(flow, shapeB, flow.waypoints[flow.waypoints.length - 1]);
-        });
-        incomingB.forEach((flow: any) => {
-          modeling.reconnectEnd(flow, shapeA, flow.waypoints[flow.waypoints.length - 1]);
-        });
-
-        // Swap ALL outgoing connections: A's outgoing becomes B's, B's outgoing becomes A's
-        outgoingA.forEach((flow: any) => {
-          modeling.reconnectStart(flow, shapeB, flow.waypoints[0]);
-        });
-        outgoingB.forEach((flow: any) => {
-          modeling.reconnectStart(flow, shapeA, flow.waypoints[0]);
-        });
-
-        // Swap positions
-        const deltaAB = {
-          x: shapeB.x - shapeA.x,
-          y: shapeB.y - shapeA.y,
-        };
-        const deltaBA = {
-          x: shapeA.x - shapeB.x,
-          y: shapeA.y - shapeB.y,
-        };
-
-        modeling.moveElements([shapeA], deltaAB);
-        modeling.moveElements([shapeB], deltaBA);
-
-        // Re-parse to update local state with new connections
-        parseElements(modeler);
-
-        toast.success(`Swapped '${elA.name}' with '${elB.name}'`);
-      } catch (error) {
-        console.error("Error performing swap:", error);
-        toast.error("Swap failed");
-        // Re-parse to show current state
-        parseElements(modeler);
+  const performSwap = useCallback(async (indexA: number, indexB: number) => {
+    if (!modeler) return;
+    const elA = elements[indexA];
+    const elB = elements[indexB];
+    try {
+      const modeling = modeler.get("modeling") as any;
+      const elementRegistry = modeler.get("elementRegistry") as any;
+      const shapeA = elementRegistry.get(elA.id);
+      const shapeB = elementRegistry.get(elB.id);
+      if (!shapeA || !shapeB) {
+        throw new Error("Elements not found in registry");
       }
-    },
-    [modeler, elements, parseElements]
-  );
+
+      // Get current connections (clone arrays)
+      const incomingA = [...(shapeA.incoming || [])];
+      const outgoingA = [...(shapeA.outgoing || [])];
+      const incomingB = [...(shapeB.incoming || [])];
+      const outgoingB = [...(shapeB.outgoing || [])];
+
+      // Swap ALL incoming connections: A's incoming becomes B's, B's incoming becomes A's
+      incomingA.forEach((flow: any) => {
+        modeling.reconnectEnd(flow, shapeB, flow.waypoints[flow.waypoints.length - 1]);
+      });
+      incomingB.forEach((flow: any) => {
+        modeling.reconnectEnd(flow, shapeA, flow.waypoints[flow.waypoints.length - 1]);
+      });
+
+      // Swap ALL outgoing connections: A's outgoing becomes B's, B's outgoing becomes A's
+      outgoingA.forEach((flow: any) => {
+        modeling.reconnectStart(flow, shapeB, flow.waypoints[0]);
+      });
+      outgoingB.forEach((flow: any) => {
+        modeling.reconnectStart(flow, shapeA, flow.waypoints[0]);
+      });
+
+      // Swap positions
+      const deltaAB = {
+        x: shapeB.x - shapeA.x,
+        y: shapeB.y - shapeA.y
+      };
+      const deltaBA = {
+        x: shapeA.x - shapeB.x,
+        y: shapeA.y - shapeB.y
+      };
+      modeling.moveElements([shapeA], deltaAB);
+      modeling.moveElements([shapeB], deltaBA);
+
+      // Re-parse to update local state with new connections
+      parseElements(modeler);
+      toast.success(`Swapped '${elA.name}' with '${elB.name}'`);
+    } catch (error) {
+      console.error("Error performing swap:", error);
+      toast.error("Swap failed");
+      // Re-parse to show current state
+      parseElements(modeler);
+    }
+  }, [modeler, elements, parseElements]);
 
   // Handle drag end
   const handleDragEnd = async (event: DragEndEvent) => {
-    const { active, over } = event;
+    const {
+      active,
+      over
+    } = event;
     if (!over || active.id === over.id) return;
-
     console.log("Drag ended:", active.id, "->", over.id);
-
-    const oldIndex = filteredElements.findIndex((el) => el.id === active.id);
-    const newIndex = filteredElements.findIndex((el) => el.id === over.id);
-
+    const oldIndex = filteredElements.findIndex(el => el.id === active.id);
+    const newIndex = filteredElements.findIndex(el => el.id === over.id);
     console.log("Indices:", oldIndex, newIndex);
-
     if (oldIndex === -1 || newIndex === -1) {
       toast.error("Could not find elements to swap");
       return;
     }
-
     await performSwap(oldIndex, newIndex);
   };
 
@@ -382,30 +301,19 @@ export function BpmnListEditor({
   const filteredElements = (() => {
     if (!searchTerm) return elements;
     const term = searchTerm.toLowerCase();
-    return elements.filter(
-      (el: BpmnElement) =>
-        el.name.toLowerCase().includes(term) ||
-        el.type.toLowerCase().includes(term)
-    );
+    return elements.filter((el: BpmnElement) => el.name.toLowerCase().includes(term) || el.type.toLowerCase().includes(term));
   })();
-
   if (loading) {
-    return (
-      <Card className="p-6">
+    return <Card className="p-6">
         <p className="text-muted-foreground">Loading BPMN diagram...</p>
-      </Card>
-    );
+      </Card>;
   }
-
-  return (
-    <div className="space-y-4">
+  return <div className="space-y-4">
       {/* Header */}
       <Card className="p-4">
         <div className="flex items-center justify-between gap-4">
           <div className="flex-1">
-            <h2 className="text-lg font-semibold text-foreground mb-1">
-              List Editor (BPMN-aware)
-            </h2>
+            
             <p className="text-sm text-muted-foreground">
               Drag and drop to swap elements in the BPMN diagram. All connections
               are rewired automatically.
@@ -420,51 +328,24 @@ export function BpmnListEditor({
 
       {/* Search */}
       <Card className="p-4">
-        <Input
-          placeholder="Search by name or type..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full"
-        />
+        <Input placeholder="Search by name or type..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full" />
       </Card>
 
       {/* List */}
       <Card className="p-6">
-        {filteredElements.length === 0 ? (
-          <p className="text-sm text-muted-foreground text-center py-8">
+        {filteredElements.length === 0 ? <p className="text-sm text-muted-foreground text-center py-8">
             No elements found
-          </p>
-        ) : (
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragEnd={handleDragEnd}
-          >
-            <SortableContext
-              items={filteredElements.map((el) => el.id)}
-              strategy={verticalListSortingStrategy}
-            >
+          </p> : <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext items={filteredElements.map(el => el.id)} strategy={verticalListSortingStrategy}>
               <div className="space-y-3">
-                {filteredElements.map((element) => (
-                  <SortableElement
-                    key={element.id}
-                    element={element}
-                    onShowConnections={setSelectedElement}
-                    onEditSubprocess={handleEditSubprocess}
-                    canEditSubprocess={entityType === "service"}
-                  />
-                ))}
+                {filteredElements.map(element => <SortableElement key={element.id} element={element} onShowConnections={setSelectedElement} onEditSubprocess={handleEditSubprocess} canEditSubprocess={entityType === "service"} />)}
               </div>
             </SortableContext>
-          </DndContext>
-        )}
+          </DndContext>}
       </Card>
 
       {/* Connections Dialog */}
-      <Dialog
-        open={!!selectedElement}
-        onOpenChange={() => setSelectedElement(null)}
-      >
+      <Dialog open={!!selectedElement} onOpenChange={() => setSelectedElement(null)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Connections</DialogTitle>
@@ -477,53 +358,34 @@ export function BpmnListEditor({
               <h4 className="text-sm font-medium text-foreground mb-2">
                 Incoming ({selectedElement?.incoming.length || 0})
               </h4>
-              {selectedElement?.incoming.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No incoming connections</p>
-              ) : (
-                <div className="space-y-2">
-                  {selectedElement?.incoming.map((flow: any, idx: number) => (
-                    <div
-                      key={idx}
-                      className="bg-muted/50 p-2 rounded border border-border text-sm"
-                    >
+              {selectedElement?.incoming.length === 0 ? <p className="text-sm text-muted-foreground">No incoming connections</p> : <div className="space-y-2">
+                  {selectedElement?.incoming.map((flow: any, idx: number) => <div key={idx} className="bg-muted/50 p-2 rounded border border-border text-sm">
                       <p className="font-medium">
                         From: {flow.source?.businessObject?.name || flow.source?.id}
                       </p>
                       <p className="text-xs text-muted-foreground">
                         ID: {flow.id}
                       </p>
-                    </div>
-                  ))}
-                </div>
-              )}
+                    </div>)}
+                </div>}
             </div>
             <div>
               <h4 className="text-sm font-medium text-foreground mb-2">
                 Outgoing ({selectedElement?.outgoing.length || 0})
               </h4>
-              {selectedElement?.outgoing.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No outgoing connections</p>
-              ) : (
-                <div className="space-y-2">
-                  {selectedElement?.outgoing.map((flow: any, idx: number) => (
-                    <div
-                      key={idx}
-                      className="bg-muted/50 p-2 rounded border border-border text-sm"
-                    >
+              {selectedElement?.outgoing.length === 0 ? <p className="text-sm text-muted-foreground">No outgoing connections</p> : <div className="space-y-2">
+                  {selectedElement?.outgoing.map((flow: any, idx: number) => <div key={idx} className="bg-muted/50 p-2 rounded border border-border text-sm">
                       <p className="font-medium">
                         To: {flow.target?.businessObject?.name || flow.target?.id}
                       </p>
                       <p className="text-xs text-muted-foreground">
                         ID: {flow.id}
                       </p>
-                    </div>
-                  ))}
-                </div>
-              )}
+                    </div>)}
+                </div>}
             </div>
           </div>
         </DialogContent>
       </Dialog>
-    </div>
-  );
+    </div>;
 }

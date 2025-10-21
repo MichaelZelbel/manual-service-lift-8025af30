@@ -416,34 +416,48 @@ export function BpmnListEditor({
           throw new Error("Elements not found in registry");
         }
 
-        // Get current connections
-        const incomingA = shapeA.incoming || [];
-        const outgoingA = shapeA.outgoing || [];
-        const incomingB = shapeB.incoming || [];
-        const outgoingB = shapeB.outgoing || [];
+        // Get current connections (clone arrays to avoid modification during iteration)
+        const incomingA = [...(shapeA.incoming || [])];
+        const outgoingA = [...(shapeA.outgoing || [])];
+        const incomingB = [...(shapeB.incoming || [])];
+        const outgoingB = [...(shapeB.outgoing || [])];
 
-        // Rewire incoming flows
+        // Identify direct connections between A and B
+        const flowsAtoB = outgoingA.filter((flow: any) => flow.target === shapeB);
+        const flowsBtoA = outgoingB.filter((flow: any) => flow.target === shapeA);
+
+        // Reconnect incoming flows (excluding direct connections between A and B)
         incomingA.forEach((flow: any) => {
-          modeling.updateProperties(flow, {
-            targetRef: shapeB.businessObject,
-          });
+          if (flow.source !== shapeB) {
+            modeling.reconnectEnd(flow, shapeB, flow.waypoints[flow.waypoints.length - 1]);
+          }
         });
         incomingB.forEach((flow: any) => {
-          modeling.updateProperties(flow, {
-            targetRef: shapeA.businessObject,
-          });
+          if (flow.source !== shapeA) {
+            modeling.reconnectEnd(flow, shapeA, flow.waypoints[flow.waypoints.length - 1]);
+          }
         });
 
-        // Rewire outgoing flows
+        // Reconnect outgoing flows (excluding direct connections between A and B)
         outgoingA.forEach((flow: any) => {
-          modeling.updateProperties(flow, {
-            sourceRef: shapeB.businessObject,
-          });
+          if (flow.target !== shapeB) {
+            modeling.reconnectStart(flow, shapeB, flow.waypoints[0]);
+          }
         });
         outgoingB.forEach((flow: any) => {
-          modeling.updateProperties(flow, {
-            sourceRef: shapeA.businessObject,
-          });
+          if (flow.target !== shapeA) {
+            modeling.reconnectStart(flow, shapeA, flow.waypoints[0]);
+          }
+        });
+
+        // Handle direct connections: A->B becomes B->A and vice versa
+        flowsAtoB.forEach((flow: any) => {
+          modeling.reconnectStart(flow, shapeB, flow.waypoints[0]);
+          modeling.reconnectEnd(flow, shapeA, flow.waypoints[flow.waypoints.length - 1]);
+        });
+        flowsBtoA.forEach((flow: any) => {
+          modeling.reconnectStart(flow, shapeA, flow.waypoints[0]);
+          modeling.reconnectEnd(flow, shapeB, flow.waypoints[flow.waypoints.length - 1]);
         });
 
         // Swap positions
@@ -459,61 +473,30 @@ export function BpmnListEditor({
         modeling.moveElements([shapeA], deltaAB);
         modeling.moveElements([shapeB], deltaBA);
 
-        // Update local state
-        const newElements = [...elements];
-        [newElements[indexA], newElements[indexB]] = [
-          newElements[indexB],
-          newElements[indexA],
-        ];
-        setElements(newElements);
+        // Re-parse to update local state with new connections
+        parseElements(modeler);
 
         toast.success(`Swapped '${elA.name}' with '${elB.name}'`);
         debouncedSave();
       } catch (error) {
         console.error("Error performing swap:", error);
-        toast.error("Swap failed. Try semantic swap instead.");
-        // Fallback: semantic swap (just swap names)
-        performSemanticSwap(indexA, indexB);
+        toast.error("Swap failed - reverting");
+        // Reload from database on error
+        const { data } = await supabase
+          .from(tableName)
+          .select("edited_bpmn_xml, original_bpmn_xml")
+          .eq("id", entityId)
+          .single();
+        if (data) {
+          const xml = data.edited_bpmn_xml || data.original_bpmn_xml;
+          if (xml) {
+            await modeler.importXML(xml);
+            parseElements(modeler);
+          }
+        }
       }
     },
-    [modeler, elements, debouncedSave]
-  );
-
-  // Fallback: Semantic swap (swap metadata only)
-  const performSemanticSwap = useCallback(
-    async (indexA: number, indexB: number) => {
-      if (!modeler) return;
-
-      const elA = elements[indexA];
-      const elB = elements[indexB];
-
-      try {
-        const modeling = modeler.get("modeling") as any;
-        const elementRegistry = modeler.get("elementRegistry") as any;
-
-        const shapeA = elementRegistry.get(elA.id);
-        const shapeB = elementRegistry.get(elB.id);
-
-        // Swap names and metadata
-        const nameA = shapeA.businessObject.name;
-        const nameB = shapeB.businessObject.name;
-
-        modeling.updateProperties(shapeA, { name: nameB });
-        modeling.updateProperties(shapeB, { name: nameA });
-
-        // Update local state
-        parseElements(modeler);
-
-        toast.warning(
-          "Topology prevented exact swap. Applied semantic swap (names swapped)."
-        );
-        debouncedSave();
-      } catch (error) {
-        console.error("Error performing semantic swap:", error);
-        toast.error("Failed to swap elements");
-      }
-    },
-    [modeler, elements, debouncedSave, parseElements]
+    [modeler, elements, debouncedSave, parseElements, tableName, entityId]
   );
 
   // Handle drag end

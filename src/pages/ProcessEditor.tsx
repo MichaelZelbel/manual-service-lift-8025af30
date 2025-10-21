@@ -7,7 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
 import { ArrowLeft, RotateCcw, Save, GripVertical } from "lucide-react";
 import { toast } from "sonner";
-import { SubprocessList } from "@/components/SubprocessList";
+
 import {
   DndContext,
   closestCenter,
@@ -58,14 +58,16 @@ interface ProcessStep {
   step_order: number;
   connections: Array<{ targetStep: number; condition: string }>;
   original_order: number;
+  subprocess_id: string | null;
 }
 
 interface SortableStepProps {
   step: ProcessStep;
   onShowConnections: (step: ProcessStep) => void;
+  onEditSubprocess: (subprocessId: string | null) => void;
 }
 
-function SortableStep({ step, onShowConnections }: SortableStepProps) {
+function SortableStep({ step, onShowConnections, onEditSubprocess }: SortableStepProps) {
   const {
     attributes,
     listeners,
@@ -112,18 +114,29 @@ function SortableStep({ step, onShowConnections }: SortableStepProps) {
           )}
         </div>
 
-        {/* Button */}
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={(e) => {
-            e.stopPropagation();
-            onShowConnections(step);
-          }}
-          className="flex-shrink-0"
-        >
-          Show Connections
-        </Button>
+        {/* Buttons */}
+        <div className="flex gap-2 flex-shrink-0">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              onShowConnections(step);
+            }}
+          >
+            Show Connections
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              onEditSubprocess(step.subprocess_id);
+            }}
+          >
+            Edit Subprocess
+          </Button>
+        </div>
       </div>
     </div>
   );
@@ -261,6 +274,14 @@ export default function ProcessEditor() {
     }
   };
 
+  const handleEditSubprocess = (subprocessId: string | null) => {
+    if (!subprocessId) {
+      toast.error("No subprocess found for this step");
+      return;
+    }
+    navigate(`/subprocess/${subprocessId}`);
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -349,18 +370,13 @@ export default function ProcessEditor() {
                         key={step.id}
                         step={step}
                         onShowConnections={setSelectedStep}
+                        onEditSubprocess={handleEditSubprocess}
                       />
                     ))}
                   </div>
                 </SortableContext>
               </DndContext>
 
-              <div className="mt-6 pt-6 border-t border-border">
-                <h3 className="text-md font-semibold text-foreground mb-4">
-                  Subprocesses
-                </h3>
-                <SubprocessList serviceId={id!} />
-              </div>
             </Card>
           </TabsContent>
 

@@ -24,6 +24,7 @@ export type Database = {
           original_order: number
           service_id: string
           step_order: number
+          subprocess_id: string | null
           updated_at: string
         }
         Insert: {
@@ -35,6 +36,7 @@ export type Database = {
           original_order: number
           service_id: string
           step_order: number
+          subprocess_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -46,6 +48,7 @@ export type Database = {
           original_order?: number
           service_id?: string
           step_order?: number
+          subprocess_id?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -54,6 +57,13 @@ export type Database = {
             columns: ["service_id"]
             isOneToOne: false
             referencedRelation: "manual_services"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "manual_service_steps_subprocess_id_fkey"
+            columns: ["subprocess_id"]
+            isOneToOne: false
+            referencedRelation: "subprocesses"
             referencedColumns: ["id"]
           },
         ]

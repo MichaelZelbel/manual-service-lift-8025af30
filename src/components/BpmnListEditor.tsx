@@ -1,0 +1,607 @@
+import { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
+import BpmnModeler from "bpmn-js/lib/Modeler";
+import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
+import {
+  GripVertical,
+  FileText,
+  GitBranch,
+  Share2,
+  Box,
+  Undo2,
+} from "lucide-react";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+
+
+interface BpmnElement {
+  id: string;
+  name: string;
+  type: string;
+  businessObject: any;
+  incoming: any[];
+  outgoing: any[];
+  bounds: { x: number; y: number; width: number; height: number };
+}
+
+interface BpmnListEditorProps {
+  entityId: string;
+  entityType: "service" | "subprocess";
+  onSave?: () => void;
+}
+
+interface SortableElementProps {
+  element: BpmnElement;
+  onShowConnections: (element: BpmnElement) => void;
+  onEditSubprocess: (elementId: string) => void;
+  canEditSubprocess: boolean;
+}
+
+function SortableElement({
+  element,
+  onShowConnections,
+  onEditSubprocess,
+  canEditSubprocess,
+}: SortableElementProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: element.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  const getIcon = () => {
+    if (element.type.includes("Task")) return <FileText className="h-5 w-5" />;
+    if (element.type.includes("Gateway")) return <GitBranch className="h-5 w-5" />;
+    return <Box className="h-5 w-5" />;
+  };
+
+  const getTypeBadge = () => {
+    if (element.type === "bpmn:UserTask") return "User Task";
+    if (element.type === "bpmn:ServiceTask") return "Service Task";
+    if (element.type === "bpmn:ExclusiveGateway") return "XOR Gateway";
+    if (element.type === "bpmn:ParallelGateway") return "AND Gateway";
+    if (element.type === "bpmn:EventBasedGateway") return "Event Gateway";
+    if (element.type === "bpmn:InclusiveGateway") return "OR Gateway";
+    return element.type.replace("bpmn:", "");
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="bg-card p-4 rounded-lg border border-border hover:border-primary hover:shadow-md transition-all duration-200 cursor-default"
+    >
+      <div className="flex items-center gap-3">
+        {/* Drag Handle */}
+        <div
+          {...attributes}
+          {...listeners}
+          className="flex-shrink-0 cursor-grab active:cursor-grabbing hover:text-primary transition-colors"
+        >
+          <GripVertical className="h-5 w-5 text-[#A0A0A0]" />
+        </div>
+
+        {/* Icon */}
+        <div className="flex-shrink-0 text-primary">{getIcon()}</div>
+
+        {/* Content */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1">
+            <h3 className="font-medium text-foreground truncate">
+              {element.name || element.id}
+            </h3>
+            <Badge variant="secondary" className="text-xs">
+              {getTypeBadge()}
+            </Badge>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {element.incoming.length} incoming, {element.outgoing.length}{" "}
+            outgoing
+          </p>
+        </div>
+
+        {/* Actions */}
+        <div className="flex gap-2 flex-shrink-0">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onShowConnections(element)}
+          >
+            <Share2 className="h-4 w-4 mr-1" />
+            Connections
+          </Button>
+          {canEditSubprocess && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onEditSubprocess(element.id)}
+            >
+              Edit Subprocess
+            </Button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function BpmnListEditor({
+  entityId,
+  entityType,
+  onSave,
+}: BpmnListEditorProps) {
+  const navigate = useNavigate();
+  const [modeler, setModeler] = useState<BpmnModeler | null>(null);
+  const [elements, setElements] = useState<BpmnElement[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedElement, setSelectedElement] = useState<BpmnElement | null>(
+    null
+  );
+  const [lastSaveTime, setLastSaveTime] = useState<NodeJS.Timeout | null>(null);
+
+  const tableName = entityType === "service" ? "manual_services" : "subprocesses";
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  // Initialize headless modeler
+  useEffect(() => {
+    const initModeler = async () => {
+      try {
+        setLoading(true);
+        const mod = new BpmnModeler({
+          container: document.createElement("div"), // Headless
+        });
+        setModeler(mod);
+
+        // Load BPMN
+        const { data, error } = await supabase
+          .from(tableName)
+          .select("original_bpmn_xml, edited_bpmn_xml")
+          .eq("id", entityId)
+          .single();
+
+        if (error) throw error;
+
+        const xmlToLoad =
+          data.edited_bpmn_xml || data.original_bpmn_xml || "";
+        if (!xmlToLoad) {
+          toast.error("No BPMN diagram found");
+          setLoading(false);
+          return;
+        }
+
+        await mod.importXML(xmlToLoad);
+        parseElements(mod);
+      } catch (error) {
+        console.error("Error initializing modeler:", error);
+        toast.error("Failed to load BPMN diagram");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    initModeler();
+
+    return () => {
+      if (lastSaveTime) clearTimeout(lastSaveTime);
+    };
+  }, [entityId, entityType]);
+
+  // Parse elements from BPMN
+  const parseElements = useCallback((mod: BpmnModeler) => {
+    try {
+      const elementRegistry = mod.get("elementRegistry") as any;
+      const allElements = elementRegistry.getAll();
+
+      const flowNodes = allElements.filter((el: any) => {
+        const type = el.type;
+        const isTask =
+          type === "bpmn:UserTask" || type === "bpmn:ServiceTask";
+        const isGateway =
+          type === "bpmn:ExclusiveGateway" ||
+          type === "bpmn:ParallelGateway" ||
+          type === "bpmn:EventBasedGateway" ||
+          type === "bpmn:InclusiveGateway";
+        return isTask || isGateway;
+      });
+
+      // Sort by DFS order (simple y-coordinate for now)
+      flowNodes.sort((a: any, b: any) => {
+        const aY = a.y || 0;
+        const bY = b.y || 0;
+        return aY - bY;
+      });
+
+      const parsed: BpmnElement[] = flowNodes.map((el: any) => ({
+        id: el.id,
+        name: el.businessObject.name || el.id,
+        type: el.type,
+        businessObject: el.businessObject,
+        incoming: el.incoming || [],
+        outgoing: el.outgoing || [],
+        bounds: {
+          x: el.x || 0,
+          y: el.y || 0,
+          width: el.width || 100,
+          height: el.height || 80,
+        },
+      }));
+
+      setElements(parsed);
+    } catch (error) {
+      console.error("Error parsing elements:", error);
+      toast.error("Failed to parse BPMN elements");
+    }
+  }, []);
+
+  // Debounced save
+  const saveBpmn = useCallback(async () => {
+    if (!modeler) return;
+    try {
+      const { xml } = await modeler.saveXML({ format: true });
+      if (!xml || !xml.includes("<bpmn:definitions")) {
+        throw new Error("Invalid BPMN XML");
+      }
+
+      const { error } = await supabase
+        .from(tableName)
+        .update({ edited_bpmn_xml: xml })
+        .eq("id", entityId);
+
+      if (error) throw error;
+      toast.success("Changes saved");
+      onSave?.();
+    } catch (error) {
+      console.error("Error saving BPMN:", error);
+      toast.error("Failed to save changes");
+    }
+  }, [modeler, entityId, tableName, onSave]);
+
+  const debouncedSave = useCallback(() => {
+    if (lastSaveTime) clearTimeout(lastSaveTime);
+    const timeout = setTimeout(() => {
+      saveBpmn();
+    }, 1200);
+    setLastSaveTime(timeout);
+  }, [saveBpmn, lastSaveTime]);
+
+  // Perform BPMN-aware swap
+  const performSwap = useCallback(
+    async (indexA: number, indexB: number) => {
+      if (!modeler) return;
+
+      const elA = elements[indexA];
+      const elB = elements[indexB];
+
+      try {
+        const modeling = modeler.get("modeling") as any;
+        const elementRegistry = modeler.get("elementRegistry") as any;
+
+        const shapeA = elementRegistry.get(elA.id);
+        const shapeB = elementRegistry.get(elB.id);
+
+        if (!shapeA || !shapeB) {
+          throw new Error("Elements not found in registry");
+        }
+
+        // Get current connections
+        const incomingA = shapeA.incoming || [];
+        const outgoingA = shapeA.outgoing || [];
+        const incomingB = shapeB.incoming || [];
+        const outgoingB = shapeB.outgoing || [];
+
+        // Rewire incoming flows
+        incomingA.forEach((flow: any) => {
+          modeling.updateProperties(flow, {
+            targetRef: shapeB.businessObject,
+          });
+        });
+        incomingB.forEach((flow: any) => {
+          modeling.updateProperties(flow, {
+            targetRef: shapeA.businessObject,
+          });
+        });
+
+        // Rewire outgoing flows
+        outgoingA.forEach((flow: any) => {
+          modeling.updateProperties(flow, {
+            sourceRef: shapeB.businessObject,
+          });
+        });
+        outgoingB.forEach((flow: any) => {
+          modeling.updateProperties(flow, {
+            sourceRef: shapeA.businessObject,
+          });
+        });
+
+        // Swap positions
+        const deltaAB = {
+          x: shapeB.x - shapeA.x,
+          y: shapeB.y - shapeA.y,
+        };
+        const deltaBA = {
+          x: shapeA.x - shapeB.x,
+          y: shapeA.y - shapeB.y,
+        };
+
+        modeling.moveElements([shapeA], deltaAB);
+        modeling.moveElements([shapeB], deltaBA);
+
+        // Update local state
+        const newElements = [...elements];
+        [newElements[indexA], newElements[indexB]] = [
+          newElements[indexB],
+          newElements[indexA],
+        ];
+        setElements(newElements);
+
+        toast.success(`Swapped '${elA.name}' with '${elB.name}'`);
+        debouncedSave();
+      } catch (error) {
+        console.error("Error performing swap:", error);
+        toast.error("Swap failed. Try semantic swap instead.");
+        // Fallback: semantic swap (just swap names)
+        performSemanticSwap(indexA, indexB);
+      }
+    },
+    [modeler, elements, debouncedSave]
+  );
+
+  // Fallback: Semantic swap (swap metadata only)
+  const performSemanticSwap = useCallback(
+    async (indexA: number, indexB: number) => {
+      if (!modeler) return;
+
+      const elA = elements[indexA];
+      const elB = elements[indexB];
+
+      try {
+        const modeling = modeler.get("modeling") as any;
+        const elementRegistry = modeler.get("elementRegistry") as any;
+
+        const shapeA = elementRegistry.get(elA.id);
+        const shapeB = elementRegistry.get(elB.id);
+
+        // Swap names and metadata
+        const nameA = shapeA.businessObject.name;
+        const nameB = shapeB.businessObject.name;
+
+        modeling.updateProperties(shapeA, { name: nameB });
+        modeling.updateProperties(shapeB, { name: nameA });
+
+        // Update local state
+        parseElements(modeler);
+
+        toast.warning(
+          "Topology prevented exact swap. Applied semantic swap (names swapped)."
+        );
+        debouncedSave();
+      } catch (error) {
+        console.error("Error performing semantic swap:", error);
+        toast.error("Failed to swap elements");
+      }
+    },
+    [modeler, elements, debouncedSave, parseElements]
+  );
+
+  // Handle drag end
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = elements.findIndex((el) => el.id === active.id);
+    const newIndex = elements.findIndex((el) => el.id === over.id);
+
+    await performSwap(oldIndex, newIndex);
+  };
+
+  // Handle Edit Subprocess - Simplified to avoid type issues
+  const handleEditSubprocess = async (elementId: string) => {
+    toast.info("Subprocess navigation coming soon");
+  };
+
+  // Undo
+  const handleUndo = useCallback(() => {
+    if (!modeler) return;
+    const commandStack = modeler.get("commandStack") as any;
+    if (commandStack.canUndo()) {
+      commandStack.undo();
+      parseElements(modeler);
+      debouncedSave();
+      toast.success("Undone");
+    } else {
+      toast.info("Nothing to undo");
+    }
+  }, [modeler, parseElements, debouncedSave]);
+
+  // Filtered elements
+  const filteredElements = (() => {
+    if (!searchTerm) return elements;
+    const term = searchTerm.toLowerCase();
+    return elements.filter(
+      (el: BpmnElement) =>
+        el.name.toLowerCase().includes(term) ||
+        el.type.toLowerCase().includes(term)
+    );
+  })();
+
+  if (loading) {
+    return (
+      <Card className="p-6">
+        <p className="text-muted-foreground">Loading BPMN diagram...</p>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Header */}
+      <Card className="p-4">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex-1">
+            <h2 className="text-lg font-semibold text-foreground mb-1">
+              List Editor (BPMN-aware)
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              Drag and drop to swap elements in the BPMN diagram. All connections
+              are rewired automatically.
+            </p>
+          </div>
+          <Button variant="outline" size="sm" onClick={handleUndo}>
+            <Undo2 className="h-4 w-4 mr-2" />
+            Undo
+          </Button>
+        </div>
+      </Card>
+
+      {/* Search */}
+      <Card className="p-4">
+        <Input
+          placeholder="Search by name or type..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="w-full"
+        />
+      </Card>
+
+      {/* List */}
+      <Card className="p-6">
+        {filteredElements.length === 0 ? (
+          <p className="text-sm text-muted-foreground text-center py-8">
+            No elements found
+          </p>
+        ) : (
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext
+              items={filteredElements.map((el) => el.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              <div className="space-y-3">
+                {filteredElements.map((element) => (
+                  <SortableElement
+                    key={element.id}
+                    element={element}
+                    onShowConnections={setSelectedElement}
+                    onEditSubprocess={handleEditSubprocess}
+                    canEditSubprocess={entityType === "service"}
+                  />
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>
+        )}
+      </Card>
+
+      {/* Connections Dialog */}
+      <Dialog
+        open={!!selectedElement}
+        onOpenChange={() => setSelectedElement(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Connections</DialogTitle>
+            <DialogDescription>
+              Connections for "{selectedElement?.name}"
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <h4 className="text-sm font-medium text-foreground mb-2">
+                Incoming ({selectedElement?.incoming.length || 0})
+              </h4>
+              {selectedElement?.incoming.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No incoming connections</p>
+              ) : (
+                <div className="space-y-2">
+                  {selectedElement?.incoming.map((flow: any, idx: number) => (
+                    <div
+                      key={idx}
+                      className="bg-muted/50 p-2 rounded border border-border text-sm"
+                    >
+                      <p className="font-medium">
+                        From: {flow.source?.businessObject?.name || flow.source?.id}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        ID: {flow.id}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div>
+              <h4 className="text-sm font-medium text-foreground mb-2">
+                Outgoing ({selectedElement?.outgoing.length || 0})
+              </h4>
+              {selectedElement?.outgoing.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No outgoing connections</p>
+              ) : (
+                <div className="space-y-2">
+                  {selectedElement?.outgoing.map((flow: any, idx: number) => (
+                    <div
+                      key={idx}
+                      className="bg-muted/50 p-2 rounded border border-border text-sm"
+                    >
+                      <p className="font-medium">
+                        To: {flow.target?.businessObject?.name || flow.target?.id}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        ID: {flow.id}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}

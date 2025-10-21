@@ -10,6 +10,7 @@ import { ArrowLeft, RotateCcw, Save, GripVertical, Plus, Trash2, Download, BarCh
 import { toast } from "sonner";
 import { ExportModal } from "@/components/ExportModal";
 import { BpmnGraphicalEditor } from "@/components/BpmnGraphicalEditor";
+import { BpmnListEditor } from "@/components/BpmnListEditor";
 import {
   DndContext,
   closestCenter,
@@ -438,51 +439,18 @@ export default function SubprocessEditor() {
       <div className="container mx-auto px-6 py-8">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="mb-6">
-            <TabsTrigger value="list">List View</TabsTrigger>
+            <TabsTrigger value="list">List Editor</TabsTrigger>
             <TabsTrigger value="graphical">Graphical Editor</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="list" className="space-y-4">
-            <Card className="p-6">
-              <h2 className="text-lg font-semibold text-foreground mb-4">
-                Subprocess Steps
-              </h2>
-              <p className="text-sm text-muted-foreground mb-6">
-                Drag and drop steps to reorder. Add or delete steps as needed.
-              </p>
-              
-              <DndContext
-                sensors={sensors}
-                collisionDetection={closestCenter}
-                onDragEnd={handleDragEnd}
-              >
-                <SortableContext
-                  items={steps.map((s) => s.id)}
-                  strategy={verticalListSortingStrategy}
-                >
-                  <div className="space-y-3">
-                    {steps.map((step) => (
-                      <SortableStep
-                        key={step.id}
-                        step={step}
-                        onShowConnections={setSelectedStep}
-                        onDelete={(step) => {
-                          setStepToDelete(step);
-                          setShowDeleteDialog(true);
-                        }}
-                      />
-                    ))}
-                  </div>
-                </SortableContext>
-              </DndContext>
-
-              <div className="mt-6 pt-6 border-t border-border">
-                <Button onClick={() => setShowAddDialog(true)}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Step
-                </Button>
-              </div>
-            </Card>
+          <TabsContent value="list">
+            {subprocess && (
+              <BpmnListEditor
+                entityId={subprocess.id}
+                entityType="subprocess"
+                onSave={fetchSubprocessAndSteps}
+              />
+            )}
           </TabsContent>
 
           <TabsContent value="graphical">

@@ -90,7 +90,7 @@ function SortableStep({ step, onShowConnections, onEditSubprocess }: SortableSte
     <div
       ref={setNodeRef}
       style={style}
-      className="bg-white p-4 rounded-lg border border-border hover:border-primary transition-all duration-200"
+      className="bg-card p-4 rounded-lg border border-border hover:border-primary transition-all duration-200"
     >
       <div className="flex items-start gap-4">
         {/* Drag Handle */}
@@ -99,7 +99,7 @@ function SortableStep({ step, onShowConnections, onEditSubprocess }: SortableSte
           {...listeners}
           className="flex-shrink-0 pt-1 cursor-grab active:cursor-grabbing hover:opacity-70 transition-opacity"
         >
-          <GripVertical className="h-5 w-5 text-[#A0A0A0]" />
+          <GripVertical className="h-5 w-5 text-muted-foreground" />
         </div>
 
         {/* Content */}
@@ -309,7 +309,7 @@ export default function ProcessEditor() {
   return (
     <div className="min-h-screen bg-background animate-fade-in">
       {/* Top Bar */}
-      <div className="bg-white border-b border-border">
+      <div className="bg-card border-b border-border">
         <div className="container mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">

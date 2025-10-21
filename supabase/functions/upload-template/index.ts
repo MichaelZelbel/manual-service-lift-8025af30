@@ -67,9 +67,9 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Validate file type
-    const contentType = file.type;
-    if (contentType !== 'application/json' && contentType !== 'text/plain') {
+    // Validate file type by checking extension (content type is unreliable for .form files)
+    const fileExtension = file.name.toLowerCase().split('.').pop();
+    if (fileExtension !== 'json' && fileExtension !== 'form') {
       return new Response(
         JSON.stringify({ error: 'Unsupported file type. Upload a Camunda Webform JSON (.form/.json)' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

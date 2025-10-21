@@ -123,9 +123,9 @@ export default function AdminTemplates() {
       return;
     }
 
-    // Validate file type
-    const fileType = uploadFile.type;
-    if (fileType !== 'application/json' && fileType !== 'text/plain') {
+    // Validate file type by extension (MIME type is unreliable for .form files)
+    const fileExtension = uploadFile.name.toLowerCase().split('.').pop();
+    if (fileExtension !== 'json' && fileExtension !== 'form') {
       toast.error("Unsupported file type. Upload a Camunda Webform JSON (.form/.json)");
       return;
     }

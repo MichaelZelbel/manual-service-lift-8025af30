@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import BpmnModeler from "bpmn-js/lib/Modeler";
+// @ts-ignore - zeebe moddle doesn't have types
+import zeebeModdle from "zeebe-bpmn-moddle/resources/zeebe.json";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -195,6 +197,7 @@ export function BpmnListEditor({
         // Create headless modeler without keyboard binding
         const mod = new BpmnModeler({
           container: document.createElement("div"),
+          moddleExtensions: { zeebe: zeebeModdle as any },
         });
         setModeler(mod);
         console.log("BpmnListEditor: Modeler created");
@@ -261,17 +264,28 @@ export function BpmnListEditor({
       });
 
       const flowNodes = allElements.filter((el: any) => {
-        const type = el.type;
+        const type = el.type as string | undefined;
         if (!type) return false;
-        
-        const isTask = type.includes("Task");
-        const isGateway = type.includes("Gateway");
-        
-        if (isTask || isGateway) {
-          console.log("  ✓ Matched:", type, el.id);
+        if (el.labelTarget || type === 'label') return false; // exclude labels
+
+        const isIncludedTask =
+          type === 'bpmn:UserTask' ||
+          type === 'bpmn:ServiceTask' ||
+          type === 'bpmn:CallActivity'; // include CallActivity for main process steps
+
+        const isIncludedGateway =
+          type === 'bpmn:ExclusiveGateway' ||
+          type === 'bpmn:ParallelGateway' ||
+          type === 'bpmn:EventBasedGateway' ||
+          type === 'bpmn:InclusiveGateway';
+
+        const isExcludedEvent = type === 'bpmn:StartEvent' || type === 'bpmn:EndEvent';
+
+        const keep = (isIncludedTask || isIncludedGateway) && !isExcludedEvent;
+        if (keep) {
+          console.log('  ✓ Matched:', type, el.id);
         }
-        
-        return isTask || isGateway;
+        return keep;
       });
 
       console.log("BpmnListEditor: Flow nodes (tasks + gateways):", flowNodes.length);

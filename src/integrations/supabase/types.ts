@@ -94,6 +94,82 @@ export type Database = {
         }
         Relationships: []
       }
+      subprocess_steps: {
+        Row: {
+          connections: Json | null
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          original_order: number
+          step_order: number
+          subprocess_id: string
+          updated_at: string
+        }
+        Insert: {
+          connections?: Json | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          original_order: number
+          step_order: number
+          subprocess_id: string
+          updated_at?: string
+        }
+        Update: {
+          connections?: Json | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          original_order?: number
+          step_order?: number
+          subprocess_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subprocess_steps_subprocess_id_fkey"
+            columns: ["subprocess_id"]
+            isOneToOne: false
+            referencedRelation: "subprocesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      subprocesses: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          service_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          service_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          service_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subprocesses_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "manual_services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never

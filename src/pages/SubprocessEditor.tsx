@@ -3,11 +3,11 @@ import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
-import { ArrowLeft, RotateCcw, Save, GripVertical } from "lucide-react";
+import { ArrowLeft, RotateCcw, Save, GripVertical, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { SubprocessList } from "@/components/SubprocessList";
 import {
   DndContext,
   closestCenter,
@@ -41,18 +41,19 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
 } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 
-interface ManualService {
-  id: string;
-  name: string;
-  performing_team: string;
-  performer_org: string;
-}
-
-interface ProcessStep {
+interface Subprocess {
   id: string;
   service_id: string;
+  name: string;
+}
+
+interface SubprocessStep {
+  id: string;
+  subprocess_id: string;
   name: string;
   description: string | null;
   step_order: number;
@@ -61,11 +62,12 @@ interface ProcessStep {
 }
 
 interface SortableStepProps {
-  step: ProcessStep;
-  onShowConnections: (step: ProcessStep) => void;
+  step: SubprocessStep;
+  onShowConnections: (step: SubprocessStep) => void;
+  onDelete: (step: SubprocessStep) => void;
 }
 
-function SortableStep({ step, onShowConnections }: SortableStepProps) {
+function SortableStep({ step, onShowConnections, onDelete }: SortableStepProps) {
   const {
     attributes,
     listeners,
@@ -112,32 +114,48 @@ function SortableStep({ step, onShowConnections }: SortableStepProps) {
           )}
         </div>
 
-        {/* Button */}
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={(e) => {
-            e.stopPropagation();
-            onShowConnections(step);
-          }}
-          className="flex-shrink-0"
-        >
-          Show Connections
-        </Button>
+        {/* Actions */}
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              onShowConnections(step);
+            }}
+          >
+            Show Connections
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete(step);
+            }}
+          >
+            <Trash2 className="h-4 w-4 text-destructive" />
+          </Button>
+        </div>
       </div>
     </div>
   );
 }
 
-export default function ProcessEditor() {
+export default function SubprocessEditor() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [service, setService] = useState<ManualService | null>(null);
-  const [steps, setSteps] = useState<ProcessStep[]>([]);
+  const [subprocess, setSubprocess] = useState<Subprocess | null>(null);
+  const [steps, setSteps] = useState<SubprocessStep[]>([]);
   const [loading, setLoading] = useState(true);
   const [showResetDialog, setShowResetDialog] = useState(false);
-  const [selectedStep, setSelectedStep] = useState<ProcessStep | null>(null);
+  const [showAddDialog, setShowAddDialog] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [selectedStep, setSelectedStep] = useState<SubprocessStep | null>(null);
+  const [stepToDelete, setStepToDelete] = useState<SubprocessStep | null>(null);
   const [activeTab, setActiveTab] = useState("list");
+  const [newStepName, setNewStepName] = useState("");
+  const [newStepDescription, setNewStepDescription] = useState("");
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -148,29 +166,29 @@ export default function ProcessEditor() {
 
   useEffect(() => {
     if (id) {
-      fetchServiceAndSteps();
+      fetchSubprocessAndSteps();
     }
   }, [id]);
 
-  const fetchServiceAndSteps = async () => {
+  const fetchSubprocessAndSteps = async () => {
     try {
       setLoading(true);
       
-      // Fetch service details
-      const { data: serviceData, error: serviceError } = await supabase
-        .from("manual_services")
+      // Fetch subprocess details
+      const { data: subprocessData, error: subprocessError } = await supabase
+        .from("subprocesses")
         .select("*")
         .eq("id", id)
         .single();
 
-      if (serviceError) throw serviceError;
-      setService(serviceData);
+      if (subprocessError) throw subprocessError;
+      setSubprocess(subprocessData);
 
       // Fetch steps
       const { data: stepsData, error: stepsError } = await supabase
-        .from("manual_service_steps")
+        .from("subprocess_steps")
         .select("*")
-        .eq("service_id", id)
+        .eq("subprocess_id", id)
         .order("step_order", { ascending: true });
 
       if (stepsError) throw stepsError;
@@ -182,7 +200,7 @@ export default function ProcessEditor() {
       );
     } catch (error) {
       console.error("Error fetching data:", error);
-      toast.error("Failed to load manual service");
+      toast.error("Failed to load subprocess");
     } finally {
       setLoading(false);
     }
@@ -210,7 +228,7 @@ export default function ProcessEditor() {
     try {
       const updates = updatedSteps.map((step) =>
         supabase
-          .from("manual_service_steps")
+          .from("subprocess_steps")
           .update({ step_order: step.step_order })
           .eq("id", step.id)
       );
@@ -220,8 +238,7 @@ export default function ProcessEditor() {
     } catch (error) {
       console.error("Error updating step order:", error);
       toast.error("Failed to update step order");
-      // Revert on error
-      fetchServiceAndSteps();
+      fetchSubprocessAndSteps();
     }
   };
 
@@ -230,13 +247,13 @@ export default function ProcessEditor() {
       // Reset all steps to original_order
       const updates = steps.map((step) =>
         supabase
-          .from("manual_service_steps")
+          .from("subprocess_steps")
           .update({ step_order: step.original_order })
           .eq("id", step.id)
       );
 
       await Promise.all(updates);
-      await fetchServiceAndSteps();
+      await fetchSubprocessAndSteps();
       toast.success("Reset to AI version successfully");
     } catch (error) {
       console.error("Error resetting steps:", error);
@@ -245,16 +262,91 @@ export default function ProcessEditor() {
     setShowResetDialog(false);
   };
 
+  const handleAddStep = async () => {
+    if (!newStepName.trim()) {
+      toast.error("Step name is required");
+      return;
+    }
+
+    try {
+      const maxOrder = steps.length > 0 ? Math.max(...steps.map(s => s.step_order)) : 0;
+      
+      const { data, error } = await supabase
+        .from("subprocess_steps")
+        .insert({
+          subprocess_id: id,
+          name: newStepName.trim(),
+          description: newStepDescription.trim() || null,
+          step_order: maxOrder + 1,
+          original_order: maxOrder + 1,
+          connections: [],
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setSteps([...steps, { ...data, connections: [] }]);
+      toast.success("Step added successfully");
+      setShowAddDialog(false);
+      setNewStepName("");
+      setNewStepDescription("");
+    } catch (error) {
+      console.error("Error adding step:", error);
+      toast.error("Failed to add step");
+    }
+  };
+
+  const handleDeleteStep = async () => {
+    if (!stepToDelete) return;
+
+    try {
+      const { error } = await supabase
+        .from("subprocess_steps")
+        .delete()
+        .eq("id", stepToDelete.id);
+
+      if (error) throw error;
+
+      // Reorder remaining steps
+      const remainingSteps = steps
+        .filter(s => s.id !== stepToDelete.id)
+        .map((step, index) => ({
+          ...step,
+          step_order: index + 1,
+        }));
+
+      setSteps(remainingSteps);
+
+      // Update orders in database
+      const updates = remainingSteps.map((step) =>
+        supabase
+          .from("subprocess_steps")
+          .update({ step_order: step.step_order })
+          .eq("id", step.id)
+      );
+
+      await Promise.all(updates);
+      toast.success("Step deleted successfully");
+    } catch (error) {
+      console.error("Error deleting step:", error);
+      toast.error("Failed to delete step");
+    }
+    setShowDeleteDialog(false);
+    setStepToDelete(null);
+  };
+
   const handleSaveAndExit = async () => {
-    // Update last_edited timestamp
     try {
       await supabase
-        .from("manual_services")
-        .update({ last_edited: new Date().toISOString() })
+        .from("subprocesses")
+        .update({ updated_at: new Date().toISOString() })
         .eq("id", id);
       
       toast.success("Changes saved successfully");
-      navigate("/dashboard");
+      if (subprocess?.service_id) {
+        navigate(`/process/${subprocess.service_id}`);
+      }
     } catch (error) {
       console.error("Error saving:", error);
       toast.error("Failed to save changes");
@@ -269,10 +361,10 @@ export default function ProcessEditor() {
     );
   }
 
-  if (!service) {
+  if (!subprocess) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <p className="text-muted-foreground">Service not found</p>
+        <p className="text-muted-foreground">Subprocess not found</p>
       </div>
     );
   }
@@ -287,16 +379,16 @@ export default function ProcessEditor() {
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={() => navigate("/dashboard")}
+                onClick={() => navigate(`/process/${subprocess.service_id}`)}
               >
                 <ArrowLeft className="h-5 w-5" />
               </Button>
               <div>
                 <h1 className="text-2xl font-semibold text-foreground">
-                  Edit Manual Service
+                  Edit Subprocess
                 </h1>
                 <p className="text-sm text-muted-foreground mt-1">
-                  {service.name}
+                  {subprocess.name}
                 </p>
               </div>
             </div>
@@ -328,10 +420,10 @@ export default function ProcessEditor() {
           <TabsContent value="list" className="space-y-4">
             <Card className="p-6">
               <h2 className="text-lg font-semibold text-foreground mb-4">
-                Process Steps
+                Subprocess Steps
               </h2>
               <p className="text-sm text-muted-foreground mb-6">
-                Drag and drop steps to reorder them. Changes are saved automatically.
+                Drag and drop steps to reorder. Add or delete steps as needed.
               </p>
               
               <DndContext
@@ -349,6 +441,10 @@ export default function ProcessEditor() {
                         key={step.id}
                         step={step}
                         onShowConnections={setSelectedStep}
+                        onDelete={(step) => {
+                          setStepToDelete(step);
+                          setShowDeleteDialog(true);
+                        }}
                       />
                     ))}
                   </div>
@@ -356,10 +452,10 @@ export default function ProcessEditor() {
               </DndContext>
 
               <div className="mt-6 pt-6 border-t border-border">
-                <h3 className="text-md font-semibold text-foreground mb-4">
-                  Subprocesses
-                </h3>
-                <SubprocessList serviceId={id!} />
+                <Button onClick={() => setShowAddDialog(true)}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Step
+                </Button>
               </div>
             </Card>
           </TabsContent>
@@ -371,10 +467,10 @@ export default function ProcessEditor() {
                   BPMN Graphical Editor
                 </h3>
                 <p className="text-muted-foreground">
-                  Interactive BPMN diagram editor will be integrated here.
+                  Interactive subprocess BPMN diagram editor will be integrated here.
                 </p>
                 <p className="text-sm text-muted-foreground mt-4">
-                  Features: Add/remove gateways, edit connections, zoom & pan controls
+                  Features: Add/remove nodes, edit connections, toolbox for gateways and tasks
                 </p>
               </div>
             </Card>
@@ -389,7 +485,7 @@ export default function ProcessEditor() {
             <AlertDialogTitle>Reset to AI Version?</AlertDialogTitle>
             <AlertDialogDescription>
               This will discard all your changes and restore the original AI-generated
-              process order. This action cannot be undone.
+              subprocess steps. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -400,6 +496,74 @@ export default function ProcessEditor() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Delete Step Confirmation Dialog */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Step?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{stepToDelete?.name}"? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setStepToDelete(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteStep} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Add Step Dialog */}
+      <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add New Step</DialogTitle>
+            <DialogDescription>
+              Create a new step for this subprocess
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="stepName">Step Name *</Label>
+              <Input
+                id="stepName"
+                placeholder="Enter step name"
+                value={newStepName}
+                onChange={(e) => setNewStepName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleAddStep();
+                  }
+                }}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="stepDescription">Description (Optional)</Label>
+              <Textarea
+                id="stepDescription"
+                placeholder="Enter step description"
+                value={newStepDescription}
+                onChange={(e) => setNewStepDescription(e.target.value)}
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setShowAddDialog(false);
+              setNewStepName("");
+              setNewStepDescription("");
+            }}>
+              Cancel
+            </Button>
+            <Button onClick={handleAddStep}>
+              Add Step
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Connections Dialog */}
       <Dialog open={!!selectedStep} onOpenChange={() => setSelectedStep(null)}>

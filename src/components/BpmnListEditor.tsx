@@ -269,6 +269,7 @@ export function BpmnListEditor({
         if (el.labelTarget || type === 'label') return false; // exclude labels
 
         const isIncludedTask =
+          type === 'bpmn:Task' ||
           type === 'bpmn:UserTask' ||
           type === 'bpmn:ServiceTask' ||
           type === 'bpmn:CallActivity'; // include CallActivity for main process steps

@@ -262,7 +262,7 @@ export function BpmnGraphicalEditor({
       modeler?.destroy();
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
-  }, [entityId, entityType, navigate, debouncedSave, loadBpmn]);
+  }, [entityId, entityType]);
 
   // Zoom controls
   const handleZoomIn = () => {

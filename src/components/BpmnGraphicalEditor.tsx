@@ -1,9 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import BpmnModeler from "bpmn-js/lib/Modeler";
-import propertiesPanelModule from "@bpmn-io/properties-panel";
-// @ts-ignore - camunda provider has no types
-import camundaPropertiesProviderModule from "bpmn-js-properties-panel/lib/provider/camunda";
 import minimapModule from "diagram-js-minimap";
 import camundaModdleDescriptor from "camunda-bpmn-moddle/resources/camunda.json";
 import { supabase } from "@/integrations/supabase/client";
@@ -65,7 +62,6 @@ export function BpmnGraphicalEditor({
   const navigate = useNavigate();
   const modelerRef = useRef<BpmnModeler | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const propertiesPanelRef = useRef<HTMLDivElement>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showMinimap, setShowMinimap] = useState(true);
@@ -178,7 +174,7 @@ export function BpmnGraphicalEditor({
     const init = () => {
       if (destroyed) return;
 
-      if (!containerRef.current || !propertiesPanelRef.current) {
+      if (!containerRef.current) {
         // Wait until refs are attached
         setTimeout(init, 50);
         return;
@@ -189,12 +185,7 @@ export function BpmnGraphicalEditor({
       try {
         modeler = new BpmnModeler({
           container: containerRef.current,
-          propertiesPanel: {
-            parent: propertiesPanelRef.current,
-          },
           additionalModules: [
-            propertiesPanelModule,
-            camundaPropertiesProviderModule,
             minimapModule,
           ],
           moddleExtensions: {
@@ -418,13 +409,6 @@ export function BpmnGraphicalEditor({
         <div
           ref={containerRef}
           className="flex-1 bg-card rounded-lg border border-border shadow-sm"
-          style={{ height: "600px" }}
-        />
-
-        {/* Properties Panel */}
-        <div
-          ref={propertiesPanelRef}
-          className="w-[360px] bg-card rounded-lg border border-border shadow-sm overflow-auto"
           style={{ height: "600px" }}
         />
       </div>

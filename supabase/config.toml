@@ -8,3 +8,12 @@ verify_jwt = false
 
 [functions.delete-template]
 verify_jwt = false
+
+[functions.mds-import]
+verify_jwt = false
+
+[functions.pdf-fetch]
+verify_jwt = false
+
+[functions.process-generation]
+verify_jwt = false

@@ -14,6 +14,42 @@ export type Database = {
   }
   public: {
     Tables: {
+      documents: {
+        Row: {
+          created_at: string | null
+          downloaded_at: string | null
+          error_message: string | null
+          file_path: string | null
+          id: string
+          is_decision_sheet: boolean | null
+          service_external_id: string
+          source_url: string
+          status: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          downloaded_at?: string | null
+          error_message?: string | null
+          file_path?: string | null
+          id?: string
+          is_decision_sheet?: boolean | null
+          service_external_id: string
+          source_url: string
+          status?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          downloaded_at?: string | null
+          error_message?: string | null
+          file_path?: string | null
+          id?: string
+          is_decision_sheet?: boolean | null
+          service_external_id?: string
+          source_url?: string
+          status?: string | null
+        }
+        Relationships: []
+      }
       exports: {
         Row: {
           completed_at: string | null
@@ -79,8 +115,48 @@ export type Database = {
         }
         Relationships: []
       }
+      jobs: {
+        Row: {
+          completed_at: string | null
+          created_at: string | null
+          error_message: string | null
+          id: string
+          job_type: string
+          progress: number | null
+          service_external_id: string
+          started_at: string | null
+          status: string | null
+          total: number | null
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          job_type: string
+          progress?: number | null
+          service_external_id: string
+          started_at?: string | null
+          status?: string | null
+          total?: number | null
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          job_type?: string
+          progress?: number | null
+          service_external_id?: string
+          started_at?: string | null
+          status?: string | null
+          total?: number | null
+        }
+        Relationships: []
+      }
       manual_service_steps: {
         Row: {
+          candidate_group: string | null
           connections: Json | null
           created_at: string
           description: string | null
@@ -93,6 +169,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          candidate_group?: string | null
           connections?: Json | null
           created_at?: string
           description?: string | null
@@ -105,6 +182,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          candidate_group?: string | null
           connections?: Json | null
           created_at?: string
           description?: string | null
@@ -169,8 +247,57 @@ export type Database = {
         }
         Relationships: []
       }
+      mds_data: {
+        Row: {
+          candidate_group: string | null
+          decision_sheet_urls: string | null
+          id: string
+          imported_at: string | null
+          performer_org: string
+          performing_team: string
+          row_hash: string
+          service_external_id: string
+          service_name: string
+          sop_urls: string | null
+          step_external_id: string
+          step_name: string
+          type: string
+        }
+        Insert: {
+          candidate_group?: string | null
+          decision_sheet_urls?: string | null
+          id?: string
+          imported_at?: string | null
+          performer_org: string
+          performing_team: string
+          row_hash: string
+          service_external_id: string
+          service_name: string
+          sop_urls?: string | null
+          step_external_id: string
+          step_name: string
+          type: string
+        }
+        Update: {
+          candidate_group?: string | null
+          decision_sheet_urls?: string | null
+          id?: string
+          imported_at?: string | null
+          performer_org?: string
+          performing_team?: string
+          row_hash?: string
+          service_external_id?: string
+          service_name?: string
+          sop_urls?: string | null
+          step_external_id?: string
+          step_name?: string
+          type?: string
+        }
+        Relationships: []
+      }
       subprocess_steps: {
         Row: {
+          candidate_group: string | null
           connections: Json | null
           created_at: string
           description: string | null
@@ -182,6 +309,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          candidate_group?: string | null
           connections?: Json | null
           created_at?: string
           description?: string | null
@@ -193,6 +321,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          candidate_group?: string | null
           connections?: Json | null
           created_at?: string
           description?: string | null

@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 import { ExportModal } from "@/components/ExportModal";
 import { useUserRole } from "@/hooks/useUserRole";
-import { Settings } from "lucide-react";
+import { Settings, Upload } from "lucide-react";
 
 interface User {
   bNumber: string;
@@ -129,13 +129,22 @@ const Dashboard = () => {
           </button>
           <div className="flex items-center gap-4">
             {isAdmin && (
-              <Button
-                variant="outline"
-                onClick={() => navigate("/admin/templates")}
-              >
-                <Settings className="h-4 w-4 mr-2" />
-                Admin
-              </Button>
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => navigate("/admin/mds-import")}
+                >
+                  <Upload className="h-4 w-4 mr-2" />
+                  MDS Import
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => navigate("/admin/templates")}
+                >
+                  <Settings className="h-4 w-4 mr-2" />
+                  Admin
+                </Button>
+              </>
             )}
             <div className="text-right">
               <p className="text-sm font-medium text-foreground">{user.name}</p>

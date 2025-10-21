@@ -171,11 +171,14 @@ export function BpmnListEditor({
       });
       console.log("BpmnListEditor: Flow nodes (tasks + gateways):", flowNodes.length);
 
-      // Sort by y-coordinate
+      // Sort by primary X (left-to-right), then Y for stability
       flowNodes.sort((a: any, b: any) => {
-        const aY = a.y || 0;
-        const bY = b.y || 0;
-        return aY - bY;
+        const ax = a.x || 0;
+        const bx = b.x || 0;
+        if (ax !== bx) return ax - bx;
+        const ay = a.y || 0;
+        const by = b.y || 0;
+        return ay - by;
       });
       const parsed: BpmnElement[] = flowNodes.map((el: any) => ({
         id: el.id,
@@ -202,81 +205,105 @@ export function BpmnListEditor({
     }
   }, []);
 
-  // Perform BPMN-aware swap - completely exchange connections
-  const performSwap = useCallback(async (indexA: number, indexB: number) => {
-    if (!modeler) return;
-    const elA = elements[indexA];
-    const elB = elements[indexB];
+  // Perform BPMN-aware swap by element IDs - safely rewire connections and swap positions
+  const performSwap = useCallback(async (idA: string, idB: string) => {
+    if (!modeler || idA === idB) return;
+
     try {
       const modeling = modeler.get("modeling") as any;
       const elementRegistry = modeler.get("elementRegistry") as any;
-      const shapeA = elementRegistry.get(elA.id);
-      const shapeB = elementRegistry.get(elB.id);
+
+      const shapeA = elementRegistry.get(idA);
+      const shapeB = elementRegistry.get(idB);
+
       if (!shapeA || !shapeB) {
         throw new Error("Elements not found in registry");
       }
 
-      // Get current connections (clone arrays)
+      console.log("BpmnListEditor: Swapping", idA, "<->", idB);
+
+      // Clone current connections
       const incomingA = [...(shapeA.incoming || [])];
       const outgoingA = [...(shapeA.outgoing || [])];
       const incomingB = [...(shapeB.incoming || [])];
       const outgoingB = [...(shapeB.outgoing || [])];
 
-      // Swap ALL incoming connections: A's incoming becomes B's, B's incoming becomes A's
+      // Detect direct connections between A and B
+      const directAB = outgoingA.find((f: any) => f.target === shapeB) || null; // A -> B
+      const directBA = outgoingB.find((f: any) => f.target === shapeA) || null; // B -> A
+
+      const processed = new Set<string>();
+
+      // Rewire incoming flows to the opposite element (excluding direct/loops)
       incomingA.forEach((flow: any) => {
-        modeling.reconnectEnd(flow, shapeB, flow.waypoints[flow.waypoints.length - 1]);
+        if (processed.has(flow.id)) return;
+        if (flow.source === shapeB) return; // handled as directBA
+        if (flow.source === shapeA) return; // guard against self-loop
+        modeling.reconnectEnd(flow, shapeB);
+        processed.add(flow.id);
       });
+
       incomingB.forEach((flow: any) => {
-        modeling.reconnectEnd(flow, shapeA, flow.waypoints[flow.waypoints.length - 1]);
+        if (processed.has(flow.id)) return;
+        if (flow.source === shapeA) return; // handled as directAB
+        if (flow.source === shapeB) return; // guard against self-loop
+        modeling.reconnectEnd(flow, shapeA);
+        processed.add(flow.id);
       });
 
-      // Swap ALL outgoing connections: A's outgoing becomes B's, B's outgoing becomes A's
+      // Rewire outgoing flows to the opposite element (excluding direct/loops)
       outgoingA.forEach((flow: any) => {
-        modeling.reconnectStart(flow, shapeB, flow.waypoints[0]);
-      });
-      outgoingB.forEach((flow: any) => {
-        modeling.reconnectStart(flow, shapeA, flow.waypoints[0]);
+        if (processed.has(flow.id)) return;
+        if (flow.target === shapeB) return; // handled as directAB
+        if (flow.target === shapeA) return; // guard against self-loop
+        modeling.reconnectStart(flow, shapeB);
+        processed.add(flow.id);
       });
 
-      // Swap positions
-      const deltaAB = {
-        x: shapeB.x - shapeA.x,
-        y: shapeB.y - shapeA.y
-      };
-      const deltaBA = {
-        x: shapeA.x - shapeB.x,
-        y: shapeA.y - shapeB.y
-      };
+      outgoingB.forEach((flow: any) => {
+        if (processed.has(flow.id)) return;
+        if (flow.target === shapeA) return; // handled as directBA
+        if (flow.target === shapeB) return; // guard against self-loop
+        modeling.reconnectStart(flow, shapeA);
+        processed.add(flow.id);
+      });
+
+      // Flip direct connections, if any
+      if (directAB) {
+        modeling.reconnectStart(directAB, shapeB);
+        modeling.reconnectEnd(directAB, shapeA);
+        processed.add(directAB.id);
+      }
+      if (directBA) {
+        modeling.reconnectStart(directBA, shapeA);
+        modeling.reconnectEnd(directBA, shapeB);
+        processed.add(directBA.id);
+      }
+
+      // Swap positions to reflect order
+      const deltaAB = { x: shapeB.x - shapeA.x, y: shapeB.y - shapeA.y };
+      const deltaBA = { x: shapeA.x - shapeB.x, y: shapeA.y - shapeB.y };
       modeling.moveElements([shapeA], deltaAB);
       modeling.moveElements([shapeB], deltaBA);
 
-      // Re-parse to update local state with new connections
+      // Refresh list
       parseElements(modeler);
-      toast.success(`Swapped '${elA.name}' with '${elB.name}'`);
+      const nameA = shapeA.businessObject?.name || idA;
+      const nameB = shapeB.businessObject?.name || idB;
+      toast.success(`Swapped '${nameA}' with '${nameB}'`);
     } catch (error) {
       console.error("Error performing swap:", error);
       toast.error("Swap failed");
-      // Re-parse to show current state
       parseElements(modeler);
     }
-  }, [modeler, elements, parseElements]);
+  }, [modeler, parseElements]);
 
   // Handle drag end
   const handleDragEnd = async (event: DragEndEvent) => {
-    const {
-      active,
-      over
-    } = event;
+    const { active, over } = event;
     if (!over || active.id === over.id) return;
     console.log("Drag ended:", active.id, "->", over.id);
-    const oldIndex = filteredElements.findIndex(el => el.id === active.id);
-    const newIndex = filteredElements.findIndex(el => el.id === over.id);
-    console.log("Indices:", oldIndex, newIndex);
-    if (oldIndex === -1 || newIndex === -1) {
-      toast.error("Could not find elements to swap");
-      return;
-    }
-    await performSwap(oldIndex, newIndex);
+    await performSwap(String(active.id), String(over.id));
   };
 
   // Handle Edit Subprocess - Simplified to avoid type issues

@@ -34,11 +34,11 @@ export function BpmnGraphicalEditor({ modeler }: BpmnGraphicalEditorProps) {
       }
       canvas.zoom("fit-viewport");
 
-      // Attach properties panel
+      // Attach properties panel (guard against missing module)
       const propertiesPanel = modeler.get("propertiesPanel") as any;
-      propertiesPanel.attachTo(propertiesPanelRef.current);
-
-      mountedRef.current = true;
+      if (propertiesPanel?.attachTo && propertiesPanelRef.current) {
+        propertiesPanel.attachTo(propertiesPanelRef.current);
+      }
     } catch (error) {
       console.error("Error mounting BPMN editor:", error);
     }

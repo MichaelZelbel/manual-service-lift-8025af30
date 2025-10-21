@@ -239,7 +239,8 @@ export function BpmnListEditor({
         if (processed.has(flow.id)) return;
         if (flow.source === shapeB) return; // handled as directBA
         if (flow.source === shapeA) return; // guard against self-loop
-        modeling.reconnectEnd(flow, shapeB);
+        const endDock = flow.waypoints?.[flow.waypoints.length - 1];
+        modeling.reconnectEnd(flow, shapeB, endDock);
         processed.add(flow.id);
       });
 
@@ -247,7 +248,8 @@ export function BpmnListEditor({
         if (processed.has(flow.id)) return;
         if (flow.source === shapeA) return; // handled as directAB
         if (flow.source === shapeB) return; // guard against self-loop
-        modeling.reconnectEnd(flow, shapeA);
+        const endDock = flow.waypoints?.[flow.waypoints.length - 1];
+        modeling.reconnectEnd(flow, shapeA, endDock);
         processed.add(flow.id);
       });
 
@@ -256,7 +258,8 @@ export function BpmnListEditor({
         if (processed.has(flow.id)) return;
         if (flow.target === shapeB) return; // handled as directAB
         if (flow.target === shapeA) return; // guard against self-loop
-        modeling.reconnectStart(flow, shapeB);
+        const startDock = flow.waypoints?.[0];
+        modeling.reconnectStart(flow, shapeB, startDock);
         processed.add(flow.id);
       });
 
@@ -264,19 +267,24 @@ export function BpmnListEditor({
         if (processed.has(flow.id)) return;
         if (flow.target === shapeA) return; // handled as directBA
         if (flow.target === shapeB) return; // guard against self-loop
-        modeling.reconnectStart(flow, shapeA);
+        const startDock = flow.waypoints?.[0];
+        modeling.reconnectStart(flow, shapeA, startDock);
         processed.add(flow.id);
       });
 
       // Flip direct connections, if any
       if (directAB) {
-        modeling.reconnectStart(directAB, shapeB);
-        modeling.reconnectEnd(directAB, shapeA);
+        const startDock = directAB.waypoints?.[0];
+        const endDock = directAB.waypoints?.[directAB.waypoints.length - 1];
+        modeling.reconnectStart(directAB, shapeB, startDock);
+        modeling.reconnectEnd(directAB, shapeA, endDock);
         processed.add(directAB.id);
       }
       if (directBA) {
-        modeling.reconnectStart(directBA, shapeA);
-        modeling.reconnectEnd(directBA, shapeB);
+        const startDock = directBA.waypoints?.[0];
+        const endDock = directBA.waypoints?.[directBA.waypoints.length - 1];
+        modeling.reconnectStart(directBA, shapeA, startDock);
+        modeling.reconnectEnd(directBA, shapeB, endDock);
         processed.add(directBA.id);
       }
 

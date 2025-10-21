@@ -397,7 +397,7 @@ export function BpmnListEditor({
     setLastSaveTime(timeout);
   }, [saveBpmn, lastSaveTime]);
 
-  // Perform BPMN-aware swap
+  // Perform BPMN-aware swap - completely exchange connections
   const performSwap = useCallback(
     async (indexA: number, indexB: number) => {
       if (!modeler) return;
@@ -416,48 +416,26 @@ export function BpmnListEditor({
           throw new Error("Elements not found in registry");
         }
 
-        // Get current connections (clone arrays to avoid modification during iteration)
+        // Get current connections (clone arrays)
         const incomingA = [...(shapeA.incoming || [])];
         const outgoingA = [...(shapeA.outgoing || [])];
         const incomingB = [...(shapeB.incoming || [])];
         const outgoingB = [...(shapeB.outgoing || [])];
 
-        // Identify direct connections between A and B
-        const flowsAtoB = outgoingA.filter((flow: any) => flow.target === shapeB);
-        const flowsBtoA = outgoingB.filter((flow: any) => flow.target === shapeA);
-
-        // Reconnect incoming flows (excluding direct connections between A and B)
+        // Swap ALL incoming connections: A's incoming becomes B's, B's incoming becomes A's
         incomingA.forEach((flow: any) => {
-          if (flow.source !== shapeB) {
-            modeling.reconnectEnd(flow, shapeB, flow.waypoints[flow.waypoints.length - 1]);
-          }
+          modeling.reconnectEnd(flow, shapeB, flow.waypoints[flow.waypoints.length - 1]);
         });
         incomingB.forEach((flow: any) => {
-          if (flow.source !== shapeA) {
-            modeling.reconnectEnd(flow, shapeA, flow.waypoints[flow.waypoints.length - 1]);
-          }
-        });
-
-        // Reconnect outgoing flows (excluding direct connections between A and B)
-        outgoingA.forEach((flow: any) => {
-          if (flow.target !== shapeB) {
-            modeling.reconnectStart(flow, shapeB, flow.waypoints[0]);
-          }
-        });
-        outgoingB.forEach((flow: any) => {
-          if (flow.target !== shapeA) {
-            modeling.reconnectStart(flow, shapeA, flow.waypoints[0]);
-          }
-        });
-
-        // Handle direct connections: A->B becomes B->A and vice versa
-        flowsAtoB.forEach((flow: any) => {
-          modeling.reconnectStart(flow, shapeB, flow.waypoints[0]);
           modeling.reconnectEnd(flow, shapeA, flow.waypoints[flow.waypoints.length - 1]);
         });
-        flowsBtoA.forEach((flow: any) => {
+
+        // Swap ALL outgoing connections: A's outgoing becomes B's, B's outgoing becomes A's
+        outgoingA.forEach((flow: any) => {
+          modeling.reconnectStart(flow, shapeB, flow.waypoints[0]);
+        });
+        outgoingB.forEach((flow: any) => {
           modeling.reconnectStart(flow, shapeA, flow.waypoints[0]);
-          modeling.reconnectEnd(flow, shapeB, flow.waypoints[flow.waypoints.length - 1]);
         });
 
         // Swap positions

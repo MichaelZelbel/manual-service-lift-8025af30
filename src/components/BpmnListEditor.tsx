@@ -232,6 +232,16 @@ export function BpmnListEditor({
       const directAB = outgoingA.find((f: any) => f.target === shapeB) || null; // A -> B
       const directBA = outgoingB.find((f: any) => f.target === shapeA) || null; // B -> A
 
+      // Track all affected flows for relayout
+      const affectedFlows = new Set<any>();
+
+      // Step 1: Move shapes first to swap positions
+      const deltaAB = { x: shapeB.x - shapeA.x, y: shapeB.y - shapeA.y };
+      const deltaBA = { x: shapeA.x - shapeB.x, y: shapeA.y - shapeB.y };
+      modeling.moveElements([shapeA], deltaAB);
+      modeling.moveElements([shapeB], deltaBA);
+
+      // Step 2: Reconnect flows WITHOUT docking parameters (let bpmn-js recalculate)
       const processed = new Set<string>();
 
       // Rewire incoming flows to the opposite element (excluding direct/loops)
@@ -239,8 +249,8 @@ export function BpmnListEditor({
         if (processed.has(flow.id)) return;
         if (flow.source === shapeB) return; // handled as directBA
         if (flow.source === shapeA) return; // guard against self-loop
-        const endDock = flow.waypoints?.[flow.waypoints.length - 1];
-        modeling.reconnectEnd(flow, shapeB, endDock);
+        modeling.reconnectEnd(flow, shapeB);
+        affectedFlows.add(flow);
         processed.add(flow.id);
       });
 
@@ -248,8 +258,8 @@ export function BpmnListEditor({
         if (processed.has(flow.id)) return;
         if (flow.source === shapeA) return; // handled as directAB
         if (flow.source === shapeB) return; // guard against self-loop
-        const endDock = flow.waypoints?.[flow.waypoints.length - 1];
-        modeling.reconnectEnd(flow, shapeA, endDock);
+        modeling.reconnectEnd(flow, shapeA);
+        affectedFlows.add(flow);
         processed.add(flow.id);
       });
 
@@ -258,8 +268,8 @@ export function BpmnListEditor({
         if (processed.has(flow.id)) return;
         if (flow.target === shapeB) return; // handled as directAB
         if (flow.target === shapeA) return; // guard against self-loop
-        const startDock = flow.waypoints?.[0];
-        modeling.reconnectStart(flow, shapeB, startDock);
+        modeling.reconnectStart(flow, shapeB);
+        affectedFlows.add(flow);
         processed.add(flow.id);
       });
 
@@ -267,32 +277,39 @@ export function BpmnListEditor({
         if (processed.has(flow.id)) return;
         if (flow.target === shapeA) return; // handled as directBA
         if (flow.target === shapeB) return; // guard against self-loop
-        const startDock = flow.waypoints?.[0];
-        modeling.reconnectStart(flow, shapeA, startDock);
+        modeling.reconnectStart(flow, shapeA);
+        affectedFlows.add(flow);
         processed.add(flow.id);
       });
 
       // Flip direct connections, if any
       if (directAB) {
-        const startDock = directAB.waypoints?.[0];
-        const endDock = directAB.waypoints?.[directAB.waypoints.length - 1];
-        modeling.reconnectStart(directAB, shapeB, startDock);
-        modeling.reconnectEnd(directAB, shapeA, endDock);
+        modeling.reconnectStart(directAB, shapeB);
+        modeling.reconnectEnd(directAB, shapeA);
+        affectedFlows.add(directAB);
         processed.add(directAB.id);
       }
       if (directBA) {
-        const startDock = directBA.waypoints?.[0];
-        const endDock = directBA.waypoints?.[directBA.waypoints.length - 1];
-        modeling.reconnectStart(directBA, shapeA, startDock);
-        modeling.reconnectEnd(directBA, shapeB, endDock);
+        modeling.reconnectStart(directBA, shapeA);
+        modeling.reconnectEnd(directBA, shapeB);
+        affectedFlows.add(directBA);
         processed.add(directBA.id);
       }
 
-      // Swap positions to reflect order
-      const deltaAB = { x: shapeB.x - shapeA.x, y: shapeB.y - shapeA.y };
-      const deltaBA = { x: shapeA.x - shapeB.x, y: shapeA.y - shapeB.y };
-      modeling.moveElements([shapeA], deltaAB);
-      modeling.moveElements([shapeB], deltaBA);
+      // Step 3: Relayout all affected connections to fix waypoints
+      affectedFlows.forEach((flow: any) => {
+        try {
+          // Try layoutConnection first (preferred method)
+          modeling.layoutConnection(flow);
+        } catch {
+          try {
+            // Fallback: updateWaypoints with null triggers recompute
+            modeling.updateWaypoints(flow, null);
+          } catch (e) {
+            console.warn('Failed to relayout connection', flow.id, e);
+          }
+        }
+      });
 
       // Refresh list
       parseElements(modeler);

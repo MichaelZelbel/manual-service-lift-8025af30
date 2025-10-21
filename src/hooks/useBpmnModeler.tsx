@@ -101,7 +101,6 @@ export function useBpmnModeler({ entityId, entityType, onAutoSave }: UseBpmnMode
         bc.postMessage({ entityId, timestamp: Date.now(), tabId: tabIdRef.current });
         bc.close();
 
-        toast.success("Changes saved");
         onAutoSave?.();
       } catch (err) {
         console.error("Error saving to database:", err);

@@ -159,7 +159,7 @@ export default function ProcessEditor() {
             </Button>
             <Button variant="default" size="sm" onClick={() => setExportModalOpen(true)}>
               <FileDown className="h-4 w-4 mr-2" />
-              Export to Camunda
+              Download for Camunda
             </Button>
           </div>
         </div>

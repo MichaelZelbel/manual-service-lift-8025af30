@@ -1,49 +1,24 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import BpmnModeler from "bpmn-js/lib/Modeler";
-import {
-  BpmnPropertiesPanelModule,
-  BpmnPropertiesProviderModule,
-  ZeebePropertiesProviderModule,
-} from "bpmn-js-properties-panel";
+import { BpmnPropertiesPanelModule, BpmnPropertiesProviderModule, ZeebePropertiesProviderModule } from "bpmn-js-properties-panel";
 // @ts-ignore - zeebe moddle doesn't have types
 import zeebeModdle from "zeebe-bpmn-moddle/resources/zeebe.json";
 import minimapModule from "diagram-js-minimap";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import {
-  ZoomIn,
-  ZoomOut,
-  Maximize2,
-  Map,
-  Upload,
-  Download,
-  RotateCcw,
-  Save,
-} from "lucide-react";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-
+import { ZoomIn, ZoomOut, Maximize2, Map, Upload, Download, RotateCcw, Save } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import 'bpmn-js/dist/assets/diagram-js.css';
 import 'bpmn-js/dist/assets/bpmn-font/css/bpmn.css';
 import 'bpmn-js/dist/assets/bpmn-js.css';
 import 'diagram-js-minimap/assets/diagram-js-minimap.css';
-
 interface BpmnGraphicalEditorProps {
   entityId: string;
   entityType: "service" | "subprocess";
   onSave?: () => void;
 }
-
 const EMPTY_BPMN = `<?xml version="1.0" encoding="UTF-8"?>
 <bpmn:definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
@@ -62,11 +37,10 @@ const EMPTY_BPMN = `<?xml version="1.0" encoding="UTF-8"?>
     </bpmndi:BPMNPlane>
   </bpmndi:BPMNDiagram>
 </bpmn:definitions>`;
-
 export function BpmnGraphicalEditor({
   entityId,
   entityType,
-  onSave,
+  onSave
 }: BpmnGraphicalEditorProps) {
   const navigate = useNavigate();
   const modelerRef = useRef<BpmnModeler | null>(null);
@@ -78,7 +52,6 @@ export function BpmnGraphicalEditor({
   const [showResetDialog, setShowResetDialog] = useState(false);
   const [originalXml, setOriginalXml] = useState<string>("");
   const saveTimeoutRef = useRef<NodeJS.Timeout>();
-
   const tableName = entityType === "service" ? "manual_services" : "subprocesses";
 
   // Load BPMN from database
@@ -87,31 +60,24 @@ export function BpmnGraphicalEditor({
     try {
       setLoading(true);
       console.log("BpmnEditor: Fetching from table", tableName);
-      
-      const { data, error } = await supabase
-        .from(tableName)
-        .select("original_bpmn_xml, edited_bpmn_xml")
-        .eq("id", entityId)
-        .single();
-
+      const {
+        data,
+        error
+      } = await supabase.from(tableName).select("original_bpmn_xml, edited_bpmn_xml").eq("id", entityId).single();
       if (error) {
         console.error("BpmnEditor: Database error", error);
         throw error;
       }
-
-      console.log("BpmnEditor: Data fetched", { 
-        hasOriginal: !!data.original_bpmn_xml, 
-        hasEdited: !!data.edited_bpmn_xml 
+      console.log("BpmnEditor: Data fetched", {
+        hasOriginal: !!data.original_bpmn_xml,
+        hasEdited: !!data.edited_bpmn_xml
       });
-
       const xmlToLoad = data.edited_bpmn_xml || data.original_bpmn_xml || EMPTY_BPMN;
       setOriginalXml(data.original_bpmn_xml || EMPTY_BPMN);
-
       if (modelerRef.current) {
         console.log("BpmnEditor: Importing XML into modeler");
         await modelerRef.current.importXML(xmlToLoad);
         console.log("BpmnEditor: XML imported successfully");
-        
         const canvas = modelerRef.current.get("canvas") as any;
         canvas.zoom("fit-viewport");
         toast.success("BPMN loaded successfully");
@@ -138,23 +104,24 @@ export function BpmnGraphicalEditor({
   // Save BPMN to database (debounced)
   const saveBpmn = useCallback(async () => {
     if (!modelerRef.current) return;
-
     try {
       setSaving(true);
-      const { xml } = await modelerRef.current.saveXML({ format: true });
+      const {
+        xml
+      } = await modelerRef.current.saveXML({
+        format: true
+      });
 
       // Validate XML
       if (!xml || !xml.includes("<bpmn:definitions")) {
         throw new Error("Invalid BPMN XML");
       }
-
-      const { error } = await supabase
-        .from(tableName)
-        .update({ edited_bpmn_xml: xml })
-        .eq("id", entityId);
-
+      const {
+        error
+      } = await supabase.from(tableName).update({
+        edited_bpmn_xml: xml
+      }).eq("id", entityId);
       if (error) throw error;
-
       toast.success("Changes saved");
       onSave?.();
     } catch (error) {
@@ -180,38 +147,31 @@ export function BpmnGraphicalEditor({
     console.log("BpmnEditor: Initialize effect running");
     let destroyed = false;
     let modeler: BpmnModeler | null = null;
-
     const init = async () => {
       // Give the DOM a moment to fully render
       await new Promise(resolve => setTimeout(resolve, 100));
-      
       if (destroyed) return;
-
       if (!containerRef.current || !propertiesPanelRef.current) {
         console.error("BpmnEditor: Container refs not available");
         toast.error("Failed to initialize BPMN editor - DOM not ready");
         setLoading(false);
         return;
       }
-
       console.log("BpmnEditor: Initializing modeler with refs");
-
       try {
         modeler = new BpmnModeler({
           container: containerRef.current,
-          propertiesPanel: { parent: propertiesPanelRef.current },
-          additionalModules: [
-            BpmnPropertiesPanelModule,
-            BpmnPropertiesProviderModule,
-            ZeebePropertiesProviderModule,
-            minimapModule,
-          ],
-          moddleExtensions: {
-            zeebe: zeebeModdle,
+          propertiesPanel: {
+            parent: propertiesPanelRef.current
           },
-          keyboard: { bindTo: document },
+          additionalModules: [BpmnPropertiesPanelModule, BpmnPropertiesProviderModule, ZeebePropertiesProviderModule, minimapModule],
+          moddleExtensions: {
+            zeebe: zeebeModdle
+          },
+          keyboard: {
+            bindTo: document
+          }
         });
-
         modelerRef.current = modeler;
         console.log("BpmnEditor: Modeler created successfully");
 
@@ -225,9 +185,7 @@ export function BpmnGraphicalEditor({
         setLoading(false);
       }
     };
-
     init();
-
     return () => {
       destroyed = true;
       console.log("BpmnEditor: Cleaning up");
@@ -240,13 +198,10 @@ export function BpmnGraphicalEditor({
   useEffect(() => {
     const modeler = modelerRef.current;
     if (!modeler) return;
-
     const eventBus = modeler.get("eventBus") as any;
-
     const onChanged = () => {
       debouncedSave();
     };
-
     const onDblClick = async (event: any) => {
       const element = event.element;
       if (element.type === "bpmn:CallActivity" && entityType === "service") {
@@ -255,14 +210,11 @@ export function BpmnGraphicalEditor({
           const match = calledElement.match(/Process_Sub_(.+)$/);
           if (match) {
             const stepExternalId = match[1];
-            const { data, error } = await supabase
-              .from("manual_service_steps")
-              .select("subprocess_id")
-              .eq("service_id", entityId)
-              .maybeSingle();
-
+            const {
+              data,
+              error
+            } = await supabase.from("manual_service_steps").select("subprocess_id").eq("service_id", entityId).maybeSingle();
             if (error) console.warn("Lookup error", error);
-
             if (data?.subprocess_id) {
               navigate(`/subprocess/${data.subprocess_id}`);
             } else {
@@ -272,10 +224,8 @@ export function BpmnGraphicalEditor({
         }
       }
     };
-
     eventBus.on("commandStack.changed", onChanged);
     eventBus.on("element.dblclick", onDblClick);
-
     return () => {
       eventBus.off("commandStack.changed", onChanged);
       eventBus.off("element.dblclick", onDblClick);
@@ -287,17 +237,14 @@ export function BpmnGraphicalEditor({
     const canvas = modelerRef.current?.get("canvas") as any;
     canvas?.zoom(canvas.zoom() + 0.1);
   };
-
   const handleZoomOut = () => {
     const canvas = modelerRef.current?.get("canvas") as any;
     canvas?.zoom(canvas.zoom() - 0.1);
   };
-
   const handleFitViewport = () => {
     const canvas = modelerRef.current?.get("canvas") as any;
     canvas?.zoom("fit-viewport");
   };
-
   const handleToggleMinimap = () => {
     setShowMinimap(!showMinimap);
     const minimap = modelerRef.current?.get("minimap") as any;
@@ -311,10 +258,9 @@ export function BpmnGraphicalEditor({
     const input = document.createElement("input");
     input.type = "file";
     input.accept = ".bpmn,.xml";
-    input.onchange = async (e) => {
+    input.onchange = async e => {
       const file = (e.target as HTMLInputElement).files?.[0];
       if (!file) return;
-
       try {
         const text = await file.text();
         if (!text.includes("<bpmn:definitions")) {
@@ -336,8 +282,14 @@ export function BpmnGraphicalEditor({
   // Export BPMN
   const handleExport = async () => {
     try {
-      const { xml } = await modelerRef.current.saveXML({ format: true });
-      const blob = new Blob([xml], { type: "application/xml" });
+      const {
+        xml
+      } = await modelerRef.current.saveXML({
+        format: true
+      });
+      const blob = new Blob([xml], {
+        type: "application/xml"
+      });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -358,17 +310,14 @@ export function BpmnGraphicalEditor({
         toast.error("No original version available");
         return;
       }
-
       await modelerRef.current?.importXML(originalXml);
       const canvas = modelerRef.current?.get("canvas") as any;
       canvas?.zoom("fit-viewport");
 
       // Clear edited version in database
-      await supabase
-        .from(tableName)
-        .update({ edited_bpmn_xml: null })
-        .eq("id", entityId);
-
+      await supabase.from(tableName).update({
+        edited_bpmn_xml: null
+      }).eq("id", entityId);
       toast.success("Reset to AI version successfully");
       setShowResetDialog(false);
     } catch (error) {
@@ -376,10 +325,7 @@ export function BpmnGraphicalEditor({
       toast.error("Failed to reset to AI version");
     }
   };
-
-
-  return (
-    <div className="space-y-4">
+  return <div className="space-y-4">
       {/* Toolbar */}
       <div className="flex items-center justify-between bg-card p-4 rounded-lg border border-border">
         <div className="flex items-center gap-2">
@@ -392,20 +338,13 @@ export function BpmnGraphicalEditor({
           <Button variant="outline" size="sm" onClick={handleFitViewport}>
             <Maximize2 className="h-4 w-4" />
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleToggleMinimap}
-            className={showMinimap ? "bg-accent" : ""}
-          >
+          <Button variant="outline" size="sm" onClick={handleToggleMinimap} className={showMinimap ? "bg-accent" : ""}>
             <Map className="h-4 w-4" />
           </Button>
         </div>
 
         <div className="flex items-center gap-2">
-          {saving && (
-            <span className="text-sm text-muted-foreground">Saving...</span>
-          )}
+          {saving && <span className="text-sm text-muted-foreground">Saving...</span>}
           <Button variant="outline" size="sm" onClick={handleImport}>
             <Upload className="h-4 w-4 mr-2" />
             Import
@@ -414,36 +353,22 @@ export function BpmnGraphicalEditor({
             <Download className="h-4 w-4 mr-2" />
             Export
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowResetDialog(true)}
-          >
-            <RotateCcw className="h-4 w-4 mr-2" />
-            Reset
-          </Button>
-          <Button size="sm" onClick={saveBpmn} disabled={saving}>
-            <Save className="h-4 w-4 mr-2" />
-            Save Now
-          </Button>
+          
+          
         </div>
       </div>
 
       {/* Editor Container */}
       <div className="flex gap-4">
         {/* Canvas */}
-        <div
-          ref={containerRef}
-          className="flex-1 bg-card rounded-lg border border-border shadow-sm"
-          style={{ height: "600px" }}
-        />
+        <div ref={containerRef} className="flex-1 bg-card rounded-lg border border-border shadow-sm" style={{
+        height: "600px"
+      }} />
 
         {/* Properties Panel */}
-        <div
-          ref={propertiesPanelRef}
-          className="w-[360px] bg-card rounded-lg border border-border shadow-sm overflow-auto"
-          style={{ height: "600px" }}
-        />
+        <div ref={propertiesPanelRef} className="w-[360px] bg-card rounded-lg border border-border shadow-sm overflow-auto" style={{
+        height: "600px"
+      }} />
       </div>
 
       {/* Reset Confirmation Dialog */}
@@ -462,6 +387,5 @@ export function BpmnGraphicalEditor({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
-  );
+    </div>;
 }

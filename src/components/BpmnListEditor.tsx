@@ -255,21 +255,28 @@ export function BpmnListEditor({
       const allElements = elementRegistry.getAll();
       console.log("BpmnListEditor: Total elements found:", allElements.length);
 
+      // Log all element types to debug
+      allElements.forEach((el: any, idx: number) => {
+        console.log(`  Element ${idx}: type="${el.type}", id="${el.id}", name="${el.businessObject?.name || 'N/A'}"`);
+      });
+
       const flowNodes = allElements.filter((el: any) => {
         const type = el.type;
-        const isTask =
-          type === "bpmn:UserTask" || type === "bpmn:ServiceTask";
-        const isGateway =
-          type === "bpmn:ExclusiveGateway" ||
-          type === "bpmn:ParallelGateway" ||
-          type === "bpmn:EventBasedGateway" ||
-          type === "bpmn:InclusiveGateway";
+        if (!type) return false;
+        
+        const isTask = type.includes("Task");
+        const isGateway = type.includes("Gateway");
+        
+        if (isTask || isGateway) {
+          console.log("  ✓ Matched:", type, el.id);
+        }
+        
         return isTask || isGateway;
       });
 
       console.log("BpmnListEditor: Flow nodes (tasks + gateways):", flowNodes.length);
 
-      // Sort by DFS order (simple y-coordinate for now)
+      // Sort by y-coordinate
       flowNodes.sort((a: any, b: any) => {
         const aY = a.y || 0;
         const bY = b.y || 0;

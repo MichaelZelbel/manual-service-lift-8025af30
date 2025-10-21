@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
-import { ArrowLeft, RotateCcw, Save } from "lucide-react";
+import { ArrowLeft, RotateCcw, Save, GripVertical } from "lucide-react";
 import { toast } from "sonner";
 import {
   DndContext,
@@ -78,18 +78,28 @@ function SortableStep({ step, onShowConnections }: SortableStepProps) {
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.5 : 1,
+    boxShadow: isDragging ? '0 10px 20px rgba(0, 0, 0, 0.15)' : undefined,
+    scale: isDragging ? '1.02' : '1',
   };
 
   return (
     <div
       ref={setNodeRef}
       style={style}
-      {...attributes}
-      {...listeners}
-      className="bg-white p-4 rounded-lg border border-border hover:border-primary transition-colors cursor-move"
+      className="bg-white p-4 rounded-lg border border-border hover:border-primary transition-all duration-200"
     >
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex-1">
+      <div className="flex items-start gap-4">
+        {/* Drag Handle */}
+        <div
+          {...attributes}
+          {...listeners}
+          className="flex-shrink-0 pt-1 cursor-grab active:cursor-grabbing hover:opacity-70 transition-opacity"
+        >
+          <GripVertical className="h-5 w-5 text-[#A0A0A0]" />
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 min-w-0">
           <h3 className="font-semibold text-foreground mb-1">{step.name}</h3>
           {step.description && (
             <p className="text-sm text-muted-foreground mb-2">{step.description}</p>
@@ -100,6 +110,8 @@ function SortableStep({ step, onShowConnections }: SortableStepProps) {
             </p>
           )}
         </div>
+
+        {/* Button */}
         <Button
           variant="outline"
           size="sm"
@@ -107,6 +119,7 @@ function SortableStep({ step, onShowConnections }: SortableStepProps) {
             e.stopPropagation();
             onShowConnections(step);
           }}
+          className="flex-shrink-0"
         >
           Show Connections
         </Button>

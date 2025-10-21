@@ -416,6 +416,11 @@ export function BpmnListEditor({
           throw new Error("Elements not found in registry");
         }
 
+        // Set localStorage first to prevent polling from reloading during save
+        const timestamp = Date.now().toString();
+        localStorage.setItem(`bpmn_updated_${entityId}`, timestamp);
+        localStorage.setItem(`bpmn_my_save_${entityId}_list`, timestamp);
+
         // Get current connections (clone arrays)
         const incomingA = [...(shapeA.incoming || [])];
         const outgoingA = [...(shapeA.outgoing || [])];
@@ -451,11 +456,24 @@ export function BpmnListEditor({
         modeling.moveElements([shapeA], deltaAB);
         modeling.moveElements([shapeB], deltaBA);
 
+        // Save immediately (not debounced) to prevent polling from reloading old version
+        const { xml } = await modeler.saveXML({ format: true });
+        if (!xml || !xml.includes("<bpmn:definitions")) {
+          throw new Error("Invalid BPMN XML");
+        }
+
+        const { error } = await supabase
+          .from(tableName)
+          .update({ edited_bpmn_xml: xml })
+          .eq("id", entityId);
+
+        if (error) throw error;
+
         // Re-parse to update local state with new connections
         parseElements(modeler);
 
         toast.success(`Swapped '${elA.name}' with '${elB.name}'`);
-        debouncedSave();
+        onSave?.();
       } catch (error) {
         console.error("Error performing swap:", error);
         toast.error("Swap failed - reverting");
@@ -474,7 +492,7 @@ export function BpmnListEditor({
         }
       }
     },
-    [modeler, elements, debouncedSave, parseElements, tableName, entityId]
+    [modeler, elements, parseElements, tableName, entityId, onSave]
   );
 
   // Handle drag end

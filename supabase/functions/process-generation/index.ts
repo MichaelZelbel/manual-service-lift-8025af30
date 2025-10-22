@@ -211,12 +211,28 @@ Deno.serve(async (req) => {
       throw new Error(`Service not found: ${serviceError?.message}`);
     }
 
+    // Pre-save a minimal fallback main BPMN so the editor can open immediately
+    try {
+      const prefillXml = FALLBACK_MAIN_TEMPLATE(serviceData.name, service_external_id);
+      await supabase
+        .from('manual_services')
+        .update({
+          original_bpmn_xml: prefillXml,
+          last_analysis: new Date().toISOString(),
+        })
+        .eq('id', service_external_id);
+      console.log('Prefilled manual_services with fallback main BPMN');
+    } catch (e) {
+      console.warn('Failed to prefill fallback main BPMN (continuing):', e);
+    }
+
     // Fetch PDF documents
     const { data: documents } = await supabase
       .from('documents')
       .select('*')
       .eq('service_external_id', service_external_id)
       .eq('status', 'downloaded');
+
 
     console.log(`Found ${documents?.length || 0} documents`);
 

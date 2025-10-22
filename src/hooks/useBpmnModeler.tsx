@@ -146,6 +146,23 @@ export function useBpmnModeler({ entityId, entityType, onAutoSave }: UseBpmnMode
 
         const xml = data.edited_bpmn_xml || data.original_bpmn_xml || "";
         if (!xml) {
+          // No BPMN present yet (e.g., generation still running). Initialize a blank diagram
+          try {
+            await modeler.createDiagram();
+            const created = await saveXml();
+            if (created) {
+              const { supabase } = await import("@/integrations/supabase/client");
+              await supabase
+                .from(tableName)
+                .update({ edited_bpmn_xml: created })
+                .eq("id", entityId);
+              await loadXml(created);
+              toast.info("No BPMN found yet — initialized a blank diagram");
+              return;
+            }
+          } catch (e) {
+            console.error("Failed to initialize blank diagram:", e);
+          }
           throw new Error("No BPMN diagram found");
         }
 

@@ -128,20 +128,6 @@ export function BpmnListEditor({
     coordinateGetter: sortableKeyboardCoordinates
   }));
 
-  // Parse elements on mount
-  useEffect(() => {
-    if (!modeler) return;
-    try {
-      setLoading(true);
-      parseElements(modeler);
-    } catch (error) {
-      console.error("Error parsing elements:", error);
-      toast.error("Failed to parse BPMN elements");
-    } finally {
-      setLoading(false);
-    }
-  }, [modeler]);
-
   // Parse elements from BPMN
   const parseElements = useCallback((mod: BpmnModeler) => {
     try {
@@ -204,6 +190,37 @@ export function BpmnListEditor({
       toast.error("Failed to parse BPMN elements");
     }
   }, []);
+
+  // Parse elements on mount
+  useEffect(() => {
+    if (!modeler) return;
+    try {
+      setLoading(true);
+      parseElements(modeler);
+    } catch (error) {
+      console.error("Error parsing elements:", error);
+      toast.error("Failed to parse BPMN elements");
+    } finally {
+      setLoading(false);
+    }
+  }, [modeler, parseElements]);
+
+  // Listen for modeler changes (e.g., after reset) and re-parse
+  useEffect(() => {
+    if (!modeler) return;
+    
+    const eventBus = modeler.get("eventBus") as any;
+    const handleChange = () => {
+      console.log("BpmnListEditor: Detected modeler change, re-parsing...");
+      parseElements(modeler);
+    };
+    
+    eventBus.on("commandStack.changed", handleChange);
+    
+    return () => {
+      eventBus.off("commandStack.changed", handleChange);
+    };
+  }, [modeler, parseElements]);
 
   // Perform BPMN-aware swap by element IDs - capture all connections, delete, swap, recreate
   const performSwap = useCallback(async (idA: string, idB: string) => {

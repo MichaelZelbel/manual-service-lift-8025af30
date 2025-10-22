@@ -1,5 +1,4 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.76.1';
-import { DOMParser } from 'https://deno.land/x/deno_dom@v0.1.38/deno-dom-wasm.ts';
 import JSZip from 'https://esm.sh/jszip@3.10.1';
 
 const corsHeaders = {
@@ -88,13 +87,6 @@ Deno.serve(async (req) => {
       forms: [],
     };
 
-    // Parse BPMN (deno_dom only supports 'text/html', but it parses XML fine)
-    const parser = new DOMParser();
-    const xmlDoc = parser.parseFromString(bpmnXml, 'text/html');
-    if (!xmlDoc) {
-      throw new Error('Failed to parse BPMN XML');
-    }
-
     const forms: Record<string, string> = {};
     const bpmnFiles: Record<string, string> = {};
     let updatedBpmnXml = bpmnXml;
@@ -120,19 +112,19 @@ Deno.serve(async (req) => {
       // Load form templates
       const templates = await loadFormTemplates(supabase);
       
-      // Get ordered elements from main BPMN
-      const orderedElements = getOrderedBpmnElements(xmlDoc);
+      // Get ordered elements from main BPMN using regex
+      const orderedElements = getOrderedBpmnElements(bpmnXml);
       
       // Generate form for start event
       let formIndex = 0;
       for (const element of orderedElements) {
-        const elementId = element.getAttribute('id') || '';
-        const elementName = element.getAttribute('name') || elementId;
-        const elementTag = (element.tagName || '').toLowerCase();
+        const elementId = element.id;
+        const elementName = element.name || elementId;
+        const elementTag = element.type;
 
-        if (elementTag.includes('startevent')) {
+        if (elementTag === 'startEvent') {
           // Start event - use First Step template
-          const templateKey = determineStartTemplate(element, xmlDoc);
+          const templateKey = 'FIRST_STEP_SINGLE'; // Simplified for now
           const formFilename = '000-start.form';
           const formId = `000-start-${timestamp}`;
 
@@ -142,7 +134,7 @@ Deno.serve(async (req) => {
                 serviceName: service.name,
                 stepName: elementName,
                 stepDescription: 'Initial process step',
-                nextTasks: getNextTasks(element, xmlDoc),
+                nextTasks: [],
                 references: '',
                 formId,
               })
@@ -151,7 +143,7 @@ Deno.serve(async (req) => {
                 serviceName: service.name,
                 stepName: elementName,
                 stepDescription: 'Initial process step',
-                nextTasks: getNextTasks(element, xmlDoc),
+                nextTasks: [],
                 references: '',
                 formId,
               }));
@@ -168,10 +160,10 @@ Deno.serve(async (req) => {
           // Update BPMN with form definition
           updatedBpmnXml = addFormDefinitionToBpmn(updatedBpmnXml, elementId, formId, elementTag);
           console.log('Generated form for start event');
-        } else if (elementTag.includes('usertask')) {
+        } else if (elementTag === 'userTask') {
           // User task - generate form and link it
           formIndex++;
-          const templateKey = determineUserTaskTemplate(element, xmlDoc);
+          const templateKey = 'NEXT_STEP_SINGLE'; // Simplified for now
           const slug = sanitizeFilename(elementName);
           const paddedIndex = String(formIndex).padStart(3, '0');
           const formFilename = `${paddedIndex}-${slug}.form`;
@@ -183,7 +175,7 @@ Deno.serve(async (req) => {
                 serviceName: service.name,
                 stepName: elementName,
                 stepDescription: getStepDescription(elementId, serviceSteps) || '',
-                nextTasks: getNextTasks(element, xmlDoc),
+                nextTasks: [],
                 references: getReferences(elementId, mdsData),
                 formId,
               })
@@ -192,7 +184,7 @@ Deno.serve(async (req) => {
                 serviceName: service.name,
                 stepName: elementName,
                 stepDescription: getStepDescription(elementId, serviceSteps) || '',
-                nextTasks: getNextTasks(element, xmlDoc),
+                nextTasks: [],
                 references: getReferences(elementId, mdsData),
                 formId,
               }));
@@ -413,54 +405,31 @@ async function loadFormTemplates(supabase: any): Promise<Record<string, any>> {
   return templates;
 }
 
-function getOrderedBpmnElements(xmlDoc: any): any[] {
-  const elements: any[] = [];
+function getOrderedBpmnElements(bpmnXml: string): Array<{id: string, name: string, type: string}> {
+  const elements: Array<{id: string, name: string, type: string}> = [];
   
-  // Get all flow elements
-  const startEvents = xmlDoc.querySelectorAll('bpmn\\:startEvent, startEvent');
-  const userTasks = xmlDoc.querySelectorAll('bpmn\\:userTask, userTask');
-  
-  // Add start events first
-  for (const el of startEvents) {
-    elements.push(el);
+  // Find start events
+  const startEventPattern = /<(?:bpmn:)?startEvent[^>]*\sid="([^"]+)"[^>]*(?:\sname="([^"]*)")?[^>]*>/gi;
+  let match;
+  while ((match = startEventPattern.exec(bpmnXml)) !== null) {
+    elements.push({
+      id: match[1],
+      name: match[2] || match[1],
+      type: 'startEvent'
+    });
   }
   
-  // Add user tasks
-  for (const el of userTasks) {
-    elements.push(el);
+  // Find user tasks
+  const userTaskPattern = /<(?:bpmn:)?userTask[^>]*\sid="([^"]+)"[^>]*(?:\sname="([^"]*)")?[^>]*>/gi;
+  while ((match = userTaskPattern.exec(bpmnXml)) !== null) {
+    elements.push({
+      id: match[1],
+      name: match[2] || match[1],
+      type: 'userTask'
+    });
   }
   
   return elements;
-}
-
-function determineStartTemplate(startEvent: any, xmlDoc: any): string {
-  const outgoing = startEvent.querySelectorAll('bpmn\\:outgoing, outgoing');
-  
-  if (outgoing.length === 1) {
-    // Check if next element is parallel gateway
-    const flowId = outgoing[0].textContent?.trim();
-    const flow = xmlDoc.querySelector(`[id="${flowId}"]`);
-    if (flow) {
-      const targetRef = flow.getAttribute('targetRef');
-      const target = xmlDoc.querySelector(`[id="${targetRef}"]`);
-      if (target && target.tagName.includes('parallelGateway')) {
-        return 'FIRST_STEP_SINGLE';
-      }
-    }
-    return 'FIRST_STEP_SINGLE';
-  }
-  
-  return 'FIRST_STEP_MULTI';
-}
-
-function determineUserTaskTemplate(userTask: any, xmlDoc: any): string {
-  const outgoing = userTask.querySelectorAll('bpmn\\:outgoing, outgoing');
-  
-  if (outgoing.length === 1) {
-    return 'NEXT_STEP_SINGLE';
-  }
-  
-  return 'NEXT_STEP_MULTI';
 }
 
 function sanitizeFilename(name: string): string {
@@ -474,26 +443,6 @@ function getStepDescription(elementId: string, serviceSteps: any[] | null): stri
   if (!serviceSteps) return '';
   const step = serviceSteps.find(s => s.name.includes(elementId) || elementId.includes(s.name));
   return step?.description || '';
-}
-
-function getNextTasks(element: any, xmlDoc: any): string[] {
-  const tasks: string[] = [];
-  const outgoing = element.querySelectorAll('bpmn\\:outgoing, outgoing');
-  
-  for (const out of outgoing) {
-    const flowId = out.textContent?.trim();
-    const flow = xmlDoc.querySelector(`[id="${flowId}"]`);
-    if (flow) {
-      const targetRef = flow.getAttribute('targetRef');
-      const target = xmlDoc.querySelector(`[id="${targetRef}"]`);
-      if (target) {
-        const name = target.getAttribute('name') || targetRef;
-        tasks.push(name);
-      }
-    }
-  }
-  
-  return tasks;
 }
 
 function getReferencesFromMds(mdsStep: any): string {
@@ -571,48 +520,45 @@ function addFormDefinitionToBpmn(
   formId: string,
   elementType: string
 ): string {
-  const parser = new DOMParser();
-  const xmlDoc = parser.parseFromString(bpmnXml, 'text/html');
+  // Use string manipulation instead of DOM parsing to preserve XML case sensitivity
+  const formDefinition = `<zeebe:formDefinition formId="${formId}" bindingType="deployment" />`;
   
-  if (!xmlDoc) return bpmnXml;
+  // Find the element by ID using regex
+  const elementPattern = new RegExp(
+    `(<(?:bpmn:)?(?:startEvent|userTask)[^>]*\\sid="${elementId}"[^>]*>)([\\s\\S]*?)(<\\/(?:bpmn:)?(?:startEvent|userTask)>)`,
+    'i'
+  );
   
-  const element = xmlDoc.querySelector(`[id="${elementId}"]`);
-  if (!element) return bpmnXml;
+  const match = bpmnXml.match(elementPattern);
+  if (!match) return bpmnXml;
   
-  // Get or create extensionElements
-  let extensionElements = element.querySelector('bpmn\\:extensionElements, extensionElements');
-  if (!extensionElements) {
-    extensionElements = xmlDoc.createElement('bpmn:extensionElements');
-    element.insertBefore(extensionElements, element.firstChild);
+  const [fullMatch, openingTag, content, closingTag] = match;
+  
+  // Check if extensionElements already exists
+  const extensionPattern = /<(bpmn:)?extensionElements>([\s\S]*?)<\/(bpmn:)?extensionElements>/i;
+  const extensionMatch = content.match(extensionPattern);
+  
+  let newContent: string;
+  if (extensionMatch) {
+    // extensionElements exists - remove any existing formDefinition and add new one
+    let extensionContent = extensionMatch[2];
+    
+    // Remove existing formDefinition
+    extensionContent = extensionContent.replace(
+      /<(zeebe:)?formDefinition[^>]*\/>/gi,
+      ''
+    );
+    
+    // Add new formDefinition at the beginning
+    const updatedExtension = `<bpmn:extensionElements>\n      ${formDefinition}${extensionContent}\n    </bpmn:extensionElements>`;
+    newContent = content.replace(extensionPattern, updatedExtension);
+  } else {
+    // No extensionElements - create one with formDefinition
+    const newExtension = `\n    <bpmn:extensionElements>\n      ${formDefinition}\n    </bpmn:extensionElements>`;
+    newContent = newExtension + content;
   }
   
-  // Remove existing formDefinition if any
-  const existingFormDef = extensionElements.querySelector('zeebe\\:formDefinition, formDefinition');
-  if (existingFormDef) {
-    existingFormDef.remove();
-  }
-  
-  // Add new formDefinition
-  const formDef = xmlDoc.createElement('zeebe:formDefinition');
-  formDef.setAttribute('formId', formId);
-  formDef.setAttribute('bindingType', 'deployment');
-  extensionElements.appendChild(formDef);
-  
-  // For user tasks, ensure zeebe:userTask exists
-  if ((elementType || '').toLowerCase().includes('usertask')) {
-    const existingUserTask = extensionElements.querySelector('zeebe\\:userTask, userTask');
-    if (!existingUserTask) {
-      const userTask = xmlDoc.createElement('zeebe:userTask');
-      extensionElements.appendChild(userTask);
-    }
-  }
-  
-  // Extract only the BPMN content, not the HTML wrapper
-  const bpmnRoot = xmlDoc.querySelector('bpmn\\:definitions, definitions');
-  if (!bpmnRoot) return bpmnXml;
-  
-  // Serialize properly without HTML wrapper
-  return bpmnRoot.outerHTML;
+  return bpmnXml.replace(fullMatch, openingTag + newContent + closingTag);
 }
 
 async function createZipPackage(

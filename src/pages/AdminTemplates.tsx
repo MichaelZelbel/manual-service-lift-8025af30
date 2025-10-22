@@ -28,7 +28,7 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, Upload, Download, Trash2, FileText, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, Upload, Download, Trash2, FileText, CheckCircle2, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -42,6 +42,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { FormPreviewModal } from "@/components/FormPreviewModal";
 
 // Template name to filename mapping
 const TEMPLATE_MAP: Record<string, string> = {
@@ -78,6 +79,9 @@ export default function AdminTemplates() {
   const [uploadSuccess, setUploadSuccess] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [templateToDelete, setTemplateToDelete] = useState<FormTemplate | null>(null);
+  const [previewModalOpen, setPreviewModalOpen] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string>("");
+  const [previewFileName, setPreviewFileName] = useState<string>("");
 
   useEffect(() => {
     if (!roleLoading) {
@@ -216,6 +220,36 @@ export default function AdminTemplates() {
     }
   };
 
+  const handlePreview = async (template: FormTemplate) => {
+    try {
+      if (!template.uploaded_by) {
+        toast.error("No file uploaded for this template yet");
+        return;
+      }
+
+      console.log('Previewing template:', template.template_name);
+
+      // Build URL with query params
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const downloadUrl = `${supabaseUrl}/functions/v1/download-template?template_name=${encodeURIComponent(template.template_name)}`;
+
+      // Fetch signed URL
+      const response = await fetch(downloadUrl);
+      const data = await response.json();
+
+      if (!response.ok || !data.ok || !data.signed_url) {
+        throw new Error(data.error || 'Failed to generate preview URL');
+      }
+
+      setPreviewUrl(data.signed_url);
+      setPreviewFileName(template.file_name);
+      setPreviewModalOpen(true);
+    } catch (error) {
+      console.error("Error previewing template:", error);
+      toast.error(`Preview failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
+
   const handleDelete = async () => {
     if (!templateToDelete || !templateToDelete.uploaded_by) return;
 
@@ -342,6 +376,14 @@ export default function AdminTemplates() {
                         <Button
                           variant="outline"
                           size="sm"
+                          onClick={() => handlePreview(template)}
+                          disabled={!template.uploaded_by}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
                           onClick={() => handleDownload(template)}
                           disabled={!template.uploaded_by}
                         >
@@ -458,6 +500,14 @@ export default function AdminTemplates() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Form Preview Modal */}
+      <FormPreviewModal
+        open={previewModalOpen}
+        onOpenChange={setPreviewModalOpen}
+        fileUrl={previewUrl}
+        fileName={previewFileName}
+      />
     </div>
   );
 }

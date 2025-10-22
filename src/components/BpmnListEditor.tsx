@@ -39,12 +39,16 @@ interface SortableElementProps {
   onShowConnections: (element: BpmnElement) => void;
   onEditSubprocess: (elementId: string) => void;
   canEditSubprocess: boolean;
+  onDelete?: (elementId: string) => void;
+  canDelete: boolean;
 }
 function SortableElement({
   element,
   onShowConnections,
   onEditSubprocess,
-  canEditSubprocess
+  canEditSubprocess,
+  onDelete,
+  canDelete
 }: SortableElementProps) {
   const {
     attributes,
@@ -110,6 +114,11 @@ function SortableElement({
           {canEditSubprocess && <Button variant="outline" size="sm" onClick={() => onEditSubprocess(element.id)}>
               Edit Subprocess
             </Button>}
+          {canDelete && onDelete && (
+            <Button variant="outline" size="sm" onClick={() => onDelete(element.id)} className="hover:bg-destructive/10 hover:text-destructive hover:border-destructive">
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          )}
         </div>
       </div>
     </div>;
@@ -126,6 +135,9 @@ export function BpmnListEditor({
   const [selectedElement, setSelectedElement] = useState<BpmnElement | null>(null);
   const [newIncomingSource, setNewIncomingSource] = useState<string>("");
   const [newOutgoingTarget, setNewOutgoingTarget] = useState<string>("");
+  const [createNodeDialogOpen, setCreateNodeDialogOpen] = useState(false);
+  const [newNodeType, setNewNodeType] = useState<string>("bpmn:UserTask");
+  const [newNodeName, setNewNodeName] = useState<string>("");
   const tableName = entityType === "service" ? "manual_services" : "subprocesses";
   const sensors = useSensors(useSensor(PointerSensor), useSensor(KeyboardSensor, {
     coordinateGetter: sortableKeyboardCoordinates
@@ -516,6 +528,85 @@ export function BpmnListEditor({
     }
   }, [modeler, parseElements]);
 
+  // Delete node
+  const handleDeleteNode = useCallback((elementId: string) => {
+    if (!modeler) return;
+    try {
+      const modeling = modeler.get("modeling") as any;
+      const elementRegistry = modeler.get("elementRegistry") as any;
+      const element = elementRegistry.get(elementId);
+      
+      if (!element) {
+        toast.error("Element not found");
+        return;
+      }
+      
+      const elementName = element.businessObject?.name || elementId;
+      modeling.removeElements([element]);
+      parseElements(modeler);
+      toast.success(`Deleted '${elementName}'`);
+    } catch (error) {
+      console.error("Error deleting node:", error);
+      toast.error("Failed to delete node");
+    }
+  }, [modeler, parseElements]);
+
+  // Create new node
+  const handleCreateNode = useCallback(() => {
+    if (!modeler || !newNodeName.trim()) {
+      toast.error("Please enter a node name");
+      return;
+    }
+    
+    try {
+      const modeling = modeler.get("modeling") as any;
+      const elementFactory = modeler.get("elementFactory") as any;
+      const elementRegistry = modeler.get("elementRegistry") as any;
+      
+      // Find a good position for the new element (to the right of existing elements)
+      const allElements = elementRegistry.getAll();
+      let maxX = 200;
+      allElements.forEach((el: any) => {
+        if (el.x && el.x > maxX) {
+          maxX = el.x;
+        }
+      });
+      
+      const position = { x: maxX + 150, y: 200 };
+      
+      // Create the new element
+      const shape = elementFactory.createShape({
+        type: newNodeType,
+        businessObject: {
+          name: newNodeName
+        }
+      });
+      
+      // Get the process element (parent container)
+      const process = elementRegistry.get("Process_Main") || 
+                      elementRegistry.filter((el: any) => el.type === "bpmn:Process")[0];
+      
+      if (!process) {
+        toast.error("Could not find process container");
+        return;
+      }
+      
+      // Add the shape to the diagram
+      modeling.createShape(shape, position, process);
+      
+      parseElements(modeler);
+      toast.success(`Created '${newNodeName}'`);
+      
+      // Reset dialog
+      setCreateNodeDialogOpen(false);
+      setNewNodeName("");
+      setNewNodeType("bpmn:UserTask");
+    } catch (error) {
+      console.error("Error creating node:", error);
+      toast.error("Failed to create node");
+    }
+  }, [modeler, newNodeName, newNodeType, parseElements]);
+
   // Get available elements for connections (excluding the selected element)
   const availableElements = elements.filter(el => el.id !== selectedElement?.id);
 
@@ -539,12 +630,21 @@ export function BpmnListEditor({
             <p className="text-sm text-muted-foreground">
               Drag and drop to swap elements in the BPMN diagram. All connections
               are rewired automatically.
+              {entityType === "subprocess" && " You can also create and delete nodes."}
             </p>
           </div>
-          <Button variant="outline" size="sm" onClick={handleUndo}>
-            <Undo2 className="h-4 w-4 mr-2" />
-            Undo
-          </Button>
+          <div className="flex gap-2">
+            {entityType === "subprocess" && (
+              <Button variant="default" size="sm" onClick={() => setCreateNodeDialogOpen(true)}>
+                <Plus className="h-4 w-4 mr-2" />
+                Create Node
+              </Button>
+            )}
+            <Button variant="outline" size="sm" onClick={handleUndo}>
+              <Undo2 className="h-4 w-4 mr-2" />
+              Undo
+            </Button>
+          </div>
         </div>
       </Card>
 
@@ -560,7 +660,7 @@ export function BpmnListEditor({
           </p> : <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
             <SortableContext items={filteredElements.map(el => el.id)} strategy={verticalListSortingStrategy}>
               <div className="space-y-3">
-                {filteredElements.map(element => <SortableElement key={element.id} element={element} onShowConnections={setSelectedElement} onEditSubprocess={handleEditSubprocess} canEditSubprocess={entityType === "service"} />)}
+                {filteredElements.map(element => <SortableElement key={element.id} element={element} onShowConnections={setSelectedElement} onEditSubprocess={handleEditSubprocess} canEditSubprocess={entityType === "service"} onDelete={handleDeleteNode} canDelete={entityType === "subprocess"} />)}
               </div>
             </SortableContext>
           </DndContext>}
@@ -659,6 +759,62 @@ export function BpmnListEditor({
                 </Button>
               </div>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Node Dialog */}
+      <Dialog open={createNodeDialogOpen} onOpenChange={setCreateNodeDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create New Node</DialogTitle>
+            <DialogDescription>
+              Choose the node type and enter a name for the new element.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">Node Type</label>
+              <Select value={newNodeType} onValueChange={setNewNodeType}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="bpmn:UserTask">User Task</SelectItem>
+                  <SelectItem value="bpmn:ServiceTask">Service Task</SelectItem>
+                  <SelectItem value="bpmn:Task">Task</SelectItem>
+                  <SelectItem value="bpmn:ExclusiveGateway">XOR Gateway (Exclusive)</SelectItem>
+                  <SelectItem value="bpmn:ParallelGateway">AND Gateway (Parallel)</SelectItem>
+                  <SelectItem value="bpmn:InclusiveGateway">OR Gateway (Inclusive)</SelectItem>
+                  <SelectItem value="bpmn:EventBasedGateway">Event Gateway</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">Node Name</label>
+              <Input 
+                placeholder="Enter node name..." 
+                value={newNodeName} 
+                onChange={(e) => setNewNodeName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    handleCreateNode();
+                  }
+                }}
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => {
+              setCreateNodeDialogOpen(false);
+              setNewNodeName("");
+              setNewNodeType("bpmn:UserTask");
+            }}>
+              Cancel
+            </Button>
+            <Button onClick={handleCreateNode} disabled={!newNodeName.trim()}>
+              Create
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

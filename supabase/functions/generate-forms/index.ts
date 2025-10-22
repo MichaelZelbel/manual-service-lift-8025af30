@@ -128,40 +128,46 @@ Deno.serve(async (req) => {
       for (const element of orderedElements) {
         const elementId = element.getAttribute('id') || '';
         const elementName = element.getAttribute('name') || elementId;
-        const elementType = element.tagName;
+        const elementTag = (element.tagName || '').toLowerCase();
 
-        if (elementType === 'bpmn:startEvent') {
+        if (elementTag.includes('startevent')) {
           // Start event - use First Step template
           const templateKey = determineStartTemplate(element, xmlDoc);
           const formFilename = '000-start.form';
           const formId = `000-start-${timestamp}`;
 
-          if (templates[templateKey]) {
-            const formJson = await generateFormJson(
-              templates[templateKey],
-              {
+          const tpl = templates[templateKey];
+          const formJson = await (tpl
+            ? generateFormJson(tpl, {
                 serviceName: service.name,
                 stepName: elementName,
                 stepDescription: 'Initial process step',
                 nextTasks: getNextTasks(element, xmlDoc),
                 references: '',
                 formId,
-              }
-            );
+              })
+            : generateFallbackFormJson({
+                kind: 'start',
+                serviceName: service.name,
+                stepName: elementName,
+                stepDescription: 'Initial process step',
+                nextTasks: getNextTasks(element, xmlDoc),
+                references: '',
+                formId,
+              }));
 
-            forms[formFilename] = formJson;
-            manifest.forms.push({
-              nodeId: elementId,
-              name: elementName,
-              filename: formFilename,
-              formId,
-              templateType: templateKey,
-            });
+          forms[formFilename] = formJson;
+          manifest.forms.push({
+            nodeId: elementId,
+            name: elementName,
+            filename: formFilename,
+            formId,
+            templateType: templateKey,
+          });
 
-            // Update BPMN with form definition
-            updatedBpmnXml = addFormDefinitionToBpmn(updatedBpmnXml, elementId, formId, elementType);
-            console.log('Generated form for start event');
-          }
+          // Update BPMN with form definition
+          updatedBpmnXml = addFormDefinitionToBpmn(updatedBpmnXml, elementId, formId, elementTag);
+          console.log('Generated form for start event');
         }
       }
 
@@ -216,6 +222,11 @@ Deno.serve(async (req) => {
         .eq('id', serviceId);
     }
 
+    // Ensure main BPMN in ZIP is the updated one (with form links)
+    if (generateBpmn) {
+      bpmnFiles['manual-service.bpmn'] = updatedBpmnXml;
+    }
+
     // Create ZIP package
     const zipBlob = await createZipPackage(
       bpmnFiles,
@@ -228,7 +239,7 @@ Deno.serve(async (req) => {
     // Upload ZIP to storage
     const zipFilename = `exports/${serviceId}/${Date.now()}/package.zip`;
     const { error: uploadError } = await supabase.storage
-      .from('form_templates')
+      .from('exports')
       .upload(zipFilename, zipBlob, {
         contentType: 'application/zip',
         upsert: true,
@@ -241,7 +252,7 @@ Deno.serve(async (req) => {
 
     // Generate signed URL
     const { data: urlData } = await supabase.storage
-      .from('form_templates')
+      .from('exports')
       .createSignedUrl(zipFilename, 3600);
 
     // Update service timestamps
@@ -446,7 +457,7 @@ function addFormDefinitionToBpmn(
   extensionElements.appendChild(formDef);
   
   // For user tasks, ensure zeebe:userTask exists
-  if (elementType === 'bpmn:userTask') {
+  if ((elementType || '').toLowerCase().includes('usertask')) {
     const existingUserTask = extensionElements.querySelector('zeebe\\:userTask, userTask');
     if (!existingUserTask) {
       const userTask = xmlDoc.createElement('zeebe:userTask');

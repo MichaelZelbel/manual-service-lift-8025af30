@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Copy, Code } from "lucide-react";
 import { toast } from "sonner";
+import { Form } from '@bpmn-io/form-js';
+import '@bpmn-io/form-js/dist/assets/form-js.css';
 
 interface FormPreviewModalProps {
   open: boolean;
@@ -27,6 +29,8 @@ export function FormPreviewModal({
   const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState<any>(null);
   const [showRawJson, setShowRawJson] = useState(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const formInstanceRef = useRef<any>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -36,7 +40,7 @@ export function FormPreviewModal({
         setLoading(true);
         setError(null);
 
-        const response = await fetch(fileUrl);
+        const response = await fetch(fileUrl, { mode: 'cors', credentials: 'omit' });
         if (!response.ok) throw new Error('Failed to fetch form file');
         const text = await response.text();
         const json = JSON.parse(text);
@@ -52,6 +56,46 @@ export function FormPreviewModal({
 
     loadForm();
   }, [open, fileUrl]);
+
+  useEffect(() => {
+    if (!open || !formData) return;
+    let cancelled = false;
+
+    const setup = async () => {
+      try {
+        // wait for container
+        let tries = 0;
+        while (!containerRef.current && tries < 20) {
+          await new Promise((r) => setTimeout(r, 50));
+          tries++;
+          if (cancelled) return;
+        }
+        if (!containerRef.current) return;
+
+        if (formInstanceRef.current) {
+          formInstanceRef.current.destroy();
+          formInstanceRef.current = null;
+        }
+
+        const form = new Form({ container: containerRef.current! });
+        await form.importSchema(formData);
+        formInstanceRef.current = form;
+      } catch (e) {
+        console.error('Form viewer error:', e);
+        setError(e instanceof Error ? e.message : 'Failed to render form');
+      }
+    };
+
+    setup();
+
+    return () => {
+      cancelled = true;
+      if (formInstanceRef.current) {
+        formInstanceRef.current.destroy();
+        formInstanceRef.current = null;
+      }
+    };
+  }, [open, formData]);
 
   const handleCopyJson = () => {
     if (formData) {

@@ -29,20 +29,42 @@ export function BpmnPreviewModal({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!open || !containerRef.current) return;
+    let cancelled = false;
 
-    const loadBpmn = async () => {
+    const run = async () => {
+      if (!open) return;
+
       try {
         setLoading(true);
         setError(null);
 
-        // Fetch BPMN XML with no-cors to avoid CORS issues with signed URLs
+        // Wait for the container to mount
+        let tries = 0;
+        while (!containerRef.current && tries < 20) {
+          await new Promise((r) => setTimeout(r, 50));
+          tries++;
+          if (cancelled) return;
+        }
+
+        if (!containerRef.current) {
+          setError('Viewer container not ready');
+          setLoading(false);
+          return;
+        }
+
+        // Fetch BPMN XML with CORS-safe settings
         const response = await fetch(fileUrl, {
           mode: 'cors',
-          credentials: 'omit'
+          credentials: 'omit',
         });
         if (!response.ok) throw new Error(`Failed to fetch BPMN file: ${response.status}`);
         const xml = await response.text();
+
+        // Clean up any previous instance
+        if (viewerRef.current) {
+          viewerRef.current.destroy();
+          viewerRef.current = null;
+        }
 
         // Create viewer
         const viewer = new BpmnViewer({
@@ -54,22 +76,25 @@ export function BpmnPreviewModal({
 
         // Import XML
         await viewer.importXML(xml);
-        
+
         // Fit to viewport
         const canvas = viewer.get('canvas') as any;
         canvas.zoom('fit-viewport');
 
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       } catch (err) {
         console.error('BPMN preview error:', err);
-        setError(err instanceof Error ? err.message : 'Failed to load BPMN diagram');
-        setLoading(false);
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : 'Failed to load BPMN diagram');
+          setLoading(false);
+        }
       }
     };
 
-    loadBpmn();
+    run();
 
     return () => {
+      cancelled = true;
       if (viewerRef.current) {
         viewerRef.current.destroy();
         viewerRef.current = null;

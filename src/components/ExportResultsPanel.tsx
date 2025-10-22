@@ -41,11 +41,7 @@ export function ExportResultsPanel({ serviceId, serviceName }: ExportResultsPane
       
       // Call edge function via URL params (GET request)
       const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/list-exports?service_id=${serviceId}`;
-      const response = await fetch(url, {
-        headers: {
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-        }
-      });
+      const response = await fetch(url);
 
       if (!response.ok) {
         throw new Error('Failed to load export files');
@@ -64,9 +60,25 @@ export function ExportResultsPanel({ serviceId, serviceName }: ExportResultsPane
     }
   };
 
-  const handleDownload = (file: ExportFile) => {
-    window.open(file.signedUrl, '_blank');
-    toast.success(`Downloading ${file.name}`);
+  const handleDownload = async (file: ExportFile) => {
+    try {
+      const res = await fetch(file.signedUrl, { mode: 'cors', credentials: 'omit' });
+      if (!res.ok) throw new Error(`Failed to download ${file.name}`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const filename = file.name.split('/').pop() || file.name;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success(`Downloading ${filename}`);
+    } catch (e) {
+      console.error('Download error', e);
+      toast.error('Download failed. Please try again.');
+    }
   };
 
   const handlePreview = (file: ExportFile) => {
@@ -83,13 +95,11 @@ export function ExportResultsPanel({ serviceId, serviceName }: ExportResultsPane
   const handleDownloadZip = async () => {
     const zipFile = files.find(f => f.type === 'zip' || f.name === 'package.zip');
     if (zipFile?.signedUrl) {
-      window.open(zipFile.signedUrl, '_blank');
-      toast.success('Downloading ZIP package');
+      await handleDownload(zipFile);
     } else {
       toast.error('ZIP package not available');
     }
   };
-
   const getFileBadge = (type: string) => {
     switch (type) {
       case 'bpmn-main':

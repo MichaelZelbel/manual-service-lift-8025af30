@@ -423,6 +423,36 @@ async function generateFormJson(
   return JSON.stringify(form, null, 2);
 }
 
+// Fallback basic form generator used when templates are unavailable
+function generateFallbackFormJson(params: {
+  kind: 'start' | 'subprocess' | string;
+  serviceName: string;
+  stepName: string;
+  stepDescription: string;
+  nextTasks: string[];
+  references: string;
+  formId: string;
+}): string {
+  const form = {
+    id: params.formId,
+    type: 'form',
+    title: `${params.serviceName} - ${params.stepName}`,
+    description: params.stepDescription || (params.kind === 'start' ? 'Initial process step' : 'Process step'),
+    fields: [
+      { type: 'section', label: 'Task Details' },
+      { type: 'text', label: 'Service', value: params.serviceName },
+      { type: 'text', label: 'Step', value: params.stepName },
+      { type: 'textarea', label: 'Description', value: params.stepDescription || '' },
+      { type: 'text', label: 'Next tasks', value: (params.nextTasks || []).join(', ') },
+      { type: 'text', label: 'References', value: params.references || '' },
+      { type: 'separator' },
+      { type: 'textarea', label: 'Notes', value: '' }
+    ]
+  } as any;
+
+  return JSON.stringify(form, null, 2);
+}
+
 function addFormDefinitionToBpmn(
   bpmnXml: string,
   elementId: string,

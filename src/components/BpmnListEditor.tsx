@@ -369,7 +369,7 @@ export function BpmnListEditor({
         return;
       }
 
-      navigate(`/subprocess/${step.subprocess_id}`);
+      navigate(`/subprocess/${step.subprocess_id}?tab=list`);
     } catch (error) {
       console.error("Error navigating to subprocess:", error);
       toast.error("Failed to open subprocess");

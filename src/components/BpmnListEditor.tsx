@@ -9,11 +9,12 @@ import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { GripVertical, FileText, GitBranch, Share2, Box, Undo2 } from "lucide-react";
+import { GripVertical, FileText, GitBranch, Share2, Box, Undo2, Trash2, Plus } from "lucide-react";
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from "@dnd-kit/core";
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 interface BpmnElement {
   id: string;
   name: string;
@@ -123,6 +124,8 @@ export function BpmnListEditor({
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedElement, setSelectedElement] = useState<BpmnElement | null>(null);
+  const [newIncomingSource, setNewIncomingSource] = useState<string>("");
+  const [newOutgoingTarget, setNewOutgoingTarget] = useState<string>("");
   const tableName = entityType === "service" ? "manual_services" : "subprocesses";
   const sensors = useSensors(useSensor(PointerSensor), useSensor(KeyboardSensor, {
     coordinateGetter: sortableKeyboardCoordinates
@@ -393,6 +396,113 @@ export function BpmnListEditor({
     }
   };
 
+  // Remove connection
+  const handleRemoveConnection = useCallback((flowId: string) => {
+    if (!modeler) return;
+    try {
+      const modeling = modeler.get("modeling") as any;
+      const elementRegistry = modeler.get("elementRegistry") as any;
+      const flow = elementRegistry.get(flowId);
+      
+      if (!flow) {
+        toast.error("Connection not found");
+        return;
+      }
+      
+      modeling.removeConnection(flow);
+      parseElements(modeler);
+      
+      // Update selected element to reflect changes
+      if (selectedElement) {
+        const updatedElement = elementRegistry.get(selectedElement.id);
+        if (updatedElement) {
+          setSelectedElement({
+            ...selectedElement,
+            incoming: updatedElement.incoming || [],
+            outgoing: updatedElement.outgoing || []
+          });
+        }
+      }
+      
+      toast.success("Connection removed");
+    } catch (error) {
+      console.error("Error removing connection:", error);
+      toast.error("Failed to remove connection");
+    }
+  }, [modeler, parseElements, selectedElement]);
+
+  // Add incoming connection
+  const handleAddIncoming = useCallback(() => {
+    if (!modeler || !selectedElement || !newIncomingSource) return;
+    try {
+      const modeling = modeler.get("modeling") as any;
+      const elementRegistry = modeler.get("elementRegistry") as any;
+      
+      const sourceElement = elementRegistry.get(newIncomingSource);
+      const targetElement = elementRegistry.get(selectedElement.id);
+      
+      if (!sourceElement || !targetElement) {
+        toast.error("Elements not found");
+        return;
+      }
+      
+      modeling.connect(sourceElement, targetElement);
+      parseElements(modeler);
+      
+      // Update selected element to reflect changes
+      const updatedElement = elementRegistry.get(selectedElement.id);
+      if (updatedElement) {
+        setSelectedElement({
+          ...selectedElement,
+          incoming: updatedElement.incoming || [],
+          outgoing: updatedElement.outgoing || []
+        });
+      }
+      
+      setNewIncomingSource("");
+      toast.success("Connection added");
+    } catch (error) {
+      console.error("Error adding connection:", error);
+      toast.error("Failed to add connection");
+    }
+  }, [modeler, parseElements, selectedElement, newIncomingSource]);
+
+  // Add outgoing connection
+  const handleAddOutgoing = useCallback(() => {
+    if (!modeler || !selectedElement || !newOutgoingTarget) return;
+    try {
+      const modeling = modeler.get("modeling") as any;
+      const elementRegistry = modeler.get("elementRegistry") as any;
+      
+      const sourceElement = elementRegistry.get(selectedElement.id);
+      const targetElement = elementRegistry.get(newOutgoingTarget);
+      
+      if (!sourceElement || !targetElement) {
+        toast.error("Elements not found");
+        return;
+      }
+      
+      modeling.connect(sourceElement, targetElement);
+      parseElements(modeler);
+      
+      // Update selected element to reflect changes
+      const updatedElement = elementRegistry.get(selectedElement.id);
+      if (updatedElement) {
+        setSelectedElement({
+          ...selectedElement,
+          incoming: updatedElement.incoming || [],
+          outgoing: updatedElement.outgoing || []
+        });
+      }
+      
+      setNewOutgoingTarget("");
+      toast.success("Connection added");
+    } catch (error) {
+      console.error("Error adding connection:", error);
+      toast.error("Failed to add connection");
+    }
+  }, [modeler, parseElements, selectedElement, newOutgoingTarget]);
+
   // Undo
   const handleUndo = useCallback(() => {
     if (!modeler) return;
@@ -405,6 +515,9 @@ export function BpmnListEditor({
       toast.info("Nothing to undo");
     }
   }, [modeler, parseElements]);
+
+  // Get available elements for connections (excluding the selected element)
+  const availableElements = elements.filter(el => el.id !== selectedElement?.id);
 
   // Filtered elements
   const filteredElements = (() => {
@@ -454,44 +567,97 @@ export function BpmnListEditor({
       </Card>
 
       {/* Connections Dialog */}
-      <Dialog open={!!selectedElement} onOpenChange={() => setSelectedElement(null)}>
-        <DialogContent>
+      <Dialog open={!!selectedElement} onOpenChange={() => {
+        setSelectedElement(null);
+        setNewIncomingSource("");
+        setNewOutgoingTarget("");
+      }}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Connections</DialogTitle>
             <DialogDescription>
-              Connections for "{selectedElement?.name}"
+              Manage connections for "{selectedElement?.name}"
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
+          <div className="space-y-6 py-4">
+            {/* Incoming Connections */}
             <div>
-              <h4 className="text-sm font-medium text-foreground mb-2">
+              <h4 className="text-sm font-medium text-foreground mb-3">
                 Incoming ({selectedElement?.incoming.length || 0})
               </h4>
-              {selectedElement?.incoming.length === 0 ? <p className="text-sm text-muted-foreground">No incoming connections</p> : <div className="space-y-2">
-                  {selectedElement?.incoming.map((flow: any, idx: number) => <div key={idx} className="bg-muted/50 p-2 rounded border border-border text-sm">
-                      <p className="font-medium">
-                        From: {flow.source?.businessObject?.name || flow.source?.id}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        ID: {flow.id}
-                      </p>
+              {selectedElement?.incoming.length === 0 ? <p className="text-sm text-muted-foreground mb-3">No incoming connections</p> : <div className="space-y-2 mb-3">
+                  {selectedElement?.incoming.map((flow: any, idx: number) => <div key={idx} className="bg-muted/50 p-3 rounded border border-border text-sm flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium">
+                          From: {flow.source?.businessObject?.name || flow.source?.id}
+                        </p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          ID: {flow.id}
+                        </p>
+                      </div>
+                      <Button variant="ghost" size="sm" onClick={() => handleRemoveConnection(flow.id)} className="flex-shrink-0 h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive">
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>)}
                 </div>}
+              
+              {/* Add Incoming Connection */}
+              <div className="flex gap-2">
+                <Select value={newIncomingSource} onValueChange={setNewIncomingSource}>
+                  <SelectTrigger className="flex-1">
+                    <SelectValue placeholder="Select source element..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableElements.map(el => <SelectItem key={el.id} value={el.id}>
+                        {el.name || el.id}
+                      </SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Button onClick={handleAddIncoming} disabled={!newIncomingSource} size="sm">
+                  <Plus className="h-4 w-4 mr-1" />
+                  Add
+                </Button>
+              </div>
             </div>
+
+            {/* Outgoing Connections */}
             <div>
-              <h4 className="text-sm font-medium text-foreground mb-2">
+              <h4 className="text-sm font-medium text-foreground mb-3">
                 Outgoing ({selectedElement?.outgoing.length || 0})
               </h4>
-              {selectedElement?.outgoing.length === 0 ? <p className="text-sm text-muted-foreground">No outgoing connections</p> : <div className="space-y-2">
-                  {selectedElement?.outgoing.map((flow: any, idx: number) => <div key={idx} className="bg-muted/50 p-2 rounded border border-border text-sm">
-                      <p className="font-medium">
-                        To: {flow.target?.businessObject?.name || flow.target?.id}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        ID: {flow.id}
-                      </p>
+              {selectedElement?.outgoing.length === 0 ? <p className="text-sm text-muted-foreground mb-3">No outgoing connections</p> : <div className="space-y-2 mb-3">
+                  {selectedElement?.outgoing.map((flow: any, idx: number) => <div key={idx} className="bg-muted/50 p-3 rounded border border-border text-sm flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium">
+                          To: {flow.target?.businessObject?.name || flow.target?.id}
+                        </p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          ID: {flow.id}
+                        </p>
+                      </div>
+                      <Button variant="ghost" size="sm" onClick={() => handleRemoveConnection(flow.id)} className="flex-shrink-0 h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive">
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>)}
                 </div>}
+              
+              {/* Add Outgoing Connection */}
+              <div className="flex gap-2">
+                <Select value={newOutgoingTarget} onValueChange={setNewOutgoingTarget}>
+                  <SelectTrigger className="flex-1">
+                    <SelectValue placeholder="Select target element..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableElements.map(el => <SelectItem key={el.id} value={el.id}>
+                        {el.name || el.id}
+                      </SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Button onClick={handleAddOutgoing} disabled={!newOutgoingTarget} size="sm">
+                  <Plus className="h-4 w-4 mr-1" />
+                  Add
+                </Button>
+              </div>
             </div>
           </div>
         </DialogContent>

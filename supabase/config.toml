@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.process-generation]
 verify_jwt = false
+
+[functions.generate-forms]
+verify_jwt = false

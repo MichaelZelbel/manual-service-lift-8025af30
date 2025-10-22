@@ -109,13 +109,35 @@ export function ExportModal({
 
       // Simulate progress
       const steps = type === "export" ? PROGRESS_STEPS.export : PROGRESS_STEPS.analysis;
-      await simulateProgress(steps);
+      const progressPromise = simulateProgress(steps);
 
-      // Generate mock download URL
-      const filename = type === "export"
-        ? `${serviceName.replace(/\s+/g, "_")}_BPMN_Package.zip`
-        : `${serviceName.replace(/\s+/g, "_")}_Analysis_Report.pdf`;
-      const mockUrl = `https://example.com/downloads/${filename}`;
+      let downloadUrl: string | null = null;
+
+      if (type === "export") {
+        // Call generate-forms edge function
+        const { data: generateData, error: generateError } = await supabase.functions.invoke(
+          'generate-forms',
+          {
+            body: {
+              serviceId,
+              generateBpmn,
+              generateForms,
+            },
+          }
+        );
+
+        if (generateError) throw generateError;
+        if (!generateData?.ok) throw new Error(generateData?.error || 'Form generation failed');
+
+        downloadUrl = generateData.downloadUrl;
+      } else {
+        // Analysis - keep mock for now
+        const filename = `${serviceName.replace(/\s+/g, "_")}_Analysis_Report.pdf`;
+        downloadUrl = `https://example.com/downloads/${filename}`;
+      }
+
+      // Wait for progress animation to complete
+      await progressPromise;
 
       // Update export record
       await supabase
@@ -123,18 +145,11 @@ export function ExportModal({
         .update({
           status: "completed",
           completed_at: new Date().toISOString(),
-          download_url: mockUrl,
+          download_url: downloadUrl,
         })
         .eq("id", exportRecord.id);
 
-      // Update service timestamp
-      const updateField = type === "export" ? "last_bpmn_export" : "last_analysis";
-      await supabase
-        .from("manual_services")
-        .update({ [updateField]: new Date().toISOString() })
-        .eq("id", serviceId);
-
-      setDownloadUrl(mockUrl);
+      setDownloadUrl(downloadUrl);
       setIsComplete(true);
       toast.success(
         type === "export"
@@ -143,7 +158,7 @@ export function ExportModal({
       );
     } catch (error) {
       console.error("Export error:", error);
-      toast.error("Failed to complete export");
+      toast.error(error instanceof Error ? error.message : "Failed to complete export");
       handleClose();
     } finally {
       setIsProcessing(false);
@@ -151,8 +166,11 @@ export function ExportModal({
   };
 
   const handleDownload = () => {
-    // In production, this would trigger actual file download
-    toast.success("Download started (simulated)");
+    if (downloadUrl) {
+      // Open download URL in new tab
+      window.open(downloadUrl, '_blank');
+      toast.success("Download started");
+    }
     handleClose();
   };
 

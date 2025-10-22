@@ -17,13 +17,12 @@ interface BpmnGraphicalEditorProps {
 export function BpmnGraphicalEditor({ modeler, activeTab }: BpmnGraphicalEditorProps) {
   const navigate = useNavigate();
   const containerRef = useRef<HTMLDivElement>(null);
-  const propertiesPanelRef = useRef<HTMLDivElement>(null);
   const [showMinimap, setShowMinimap] = useState(true);
   const mountedRef = useRef(false);
 
   // Mount the modeler canvas to our container
   useEffect(() => {
-    if (!containerRef.current || !propertiesPanelRef.current || mountedRef.current) return;
+    if (!containerRef.current || mountedRef.current) return;
 
     try {
       // Attach canvas
@@ -32,15 +31,6 @@ export function BpmnGraphicalEditor({ modeler, activeTab }: BpmnGraphicalEditorP
       const modelerContainer = canvas._container;
       if (modelerContainer && !container.contains(modelerContainer)) {
         container.appendChild(modelerContainer);
-      }
-
-      // Attach properties panel (guard against missing module)
-      let propertiesPanel: any = null;
-      try {
-        propertiesPanel = (modeler as any).get("propertiesPanel", false);
-      } catch {}
-      if (propertiesPanel?.attachTo && propertiesPanelRef.current) {
-        propertiesPanel.attachTo(propertiesPanelRef.current);
       }
     } catch (error) {
       console.error("Error mounting BPMN editor:", error);
@@ -148,21 +138,11 @@ export function BpmnGraphicalEditor({ modeler, activeTab }: BpmnGraphicalEditorP
       </div>
 
       {/* Editor Container */}
-      <div className="flex gap-4">
-        {/* Canvas */}
-        <div
-          ref={containerRef}
-          className="flex-1 bg-card rounded-lg border border-border shadow-sm"
-          style={{ height: "600px" }}
-        />
-
-        {/* Properties Panel */}
-        <div
-          ref={propertiesPanelRef}
-          className="w-[360px] bg-card rounded-lg border border-border shadow-sm overflow-auto"
-          style={{ height: "600px" }}
-        />
-      </div>
+      <div
+        ref={containerRef}
+        className="w-full bg-card rounded-lg border border-border shadow-sm"
+        style={{ height: "600px" }}
+      />
     </div>
   );
 }

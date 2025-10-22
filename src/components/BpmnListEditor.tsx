@@ -343,27 +343,33 @@ export function BpmnListEditor({
         return;
       }
 
-      // Get the called element reference (subprocess name)
-      const calledElement = element.businessObject?.calledElement;
-      if (!calledElement) {
-        toast.error("No subprocess reference found");
+      // Get the step name from the BPMN element
+      const stepName = element.businessObject?.name;
+      if (!stepName) {
+        toast.error("No step name found");
         return;
       }
 
-      // Query the subprocess by name (calledElement is usually the process ID/name)
-      const { data: subprocess, error } = await supabase
-        .from("subprocesses")
-        .select("id")
+      // Query the manual_service_steps table using the hard reference
+      const { data: step, error } = await supabase
+        .from("manual_service_steps")
+        .select("subprocess_id")
         .eq("service_id", entityId)
-        .ilike("name", `%${calledElement}%`)
-        .single();
+        .eq("name", stepName)
+        .maybeSingle();
 
-      if (error || !subprocess) {
-        toast.error("Subprocess not found in database");
+      if (error) {
+        console.error("Error querying step:", error);
+        toast.error("Failed to find step in database");
         return;
       }
 
-      navigate(`/subprocess/${subprocess.id}`);
+      if (!step?.subprocess_id) {
+        toast.error("No subprocess linked to this step");
+        return;
+      }
+
+      navigate(`/subprocess/${step.subprocess_id}`);
     } catch (error) {
       console.error("Error navigating to subprocess:", error);
       toast.error("Failed to open subprocess");

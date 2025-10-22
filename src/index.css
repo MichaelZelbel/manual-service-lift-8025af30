@@ -8,7 +8,7 @@ All colors MUST be HSL.
 
 @layer base {
   :root {
-    /* Nordic Banking Design System - Danske Bank Inspired */
+    /* Nordic Banking Design System - Refined for clarity and trust */
     --background: 210 29% 96%; /* #F2F5F8 Nordic grey-blue */
     --foreground: 206 100% 15%; /* Deep blue text */
 
@@ -18,16 +18,30 @@ All colors MUST be HSL.
     --popover: 0 0% 100%;
     --popover-foreground: 206 100% 15%;
 
-    --primary: 206 100% 23%; /* #003D73 Danske blue */
+    /* Primary Button - Main actions */
+    --primary: 204 100% 31%; /* #005A9C - Trustworthy blue */
     --primary-foreground: 0 0% 100%;
+    --primary-hover: 204 100% 24%; /* #00457A */
+    --primary-active: 204 100% 20%; /* #003A66 */
 
-    --secondary: 206 100% 33%; /* #005DAA Brighter blue */
-    --secondary-foreground: 0 0% 100%;
+    /* Secondary Button - Supporting actions */
+    --secondary: 209 65% 94%; /* #E6F0FA - Light blue bg */
+    --secondary-foreground: 204 100% 31%; /* #005A9C text */
+    --secondary-border: 209 70% 87%; /* #CCE2F5 */
+    --secondary-hover: 209 70% 87%; /* #CCE2F5 */
+    --secondary-active: 209 63% 80%; /* #B5D1EE */
+
+    /* Tertiary Button - Optional actions */
+    --tertiary: 207 29% 97%; /* #F5F8FA */
+    --tertiary-foreground: 204 100% 31%; /* #005A9C */
+    --tertiary-border: 209 25% 90%; /* #E1E8EF */
+    --tertiary-hover: 206 36% 94%; /* #EAF2F8 */
+    --tertiary-active: 205 55% 91%; /* #DCEAF3 */
 
     --muted: 210 20% 90%;
     --muted-foreground: 206 20% 45%;
 
-    --accent: 206 100% 33%;
+    --accent: 204 100% 31%;
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 84% 60%;
@@ -35,9 +49,9 @@ All colors MUST be HSL.
 
     --border: 210 20% 88%;
     --input: 210 20% 88%;
-    --ring: 206 100% 33%;
+    --ring: 204 100% 31%;
 
-    --radius: 0.75rem;
+    --radius: 0.5rem;
 
     --sidebar-background: 0 0% 98%;
 
@@ -66,16 +80,30 @@ All colors MUST be HSL.
     --popover: 206 100% 10%;
     --popover-foreground: 210 29% 96%;
 
-    --primary: 206 100% 33%;
+    /* Primary Button - Dark mode */
+    --primary: 204 100% 31%; /* #005A9C */
     --primary-foreground: 0 0% 100%;
+    --primary-hover: 204 100% 24%; /* #00457A */
+    --primary-active: 204 100% 20%; /* #003A66 */
 
-    --secondary: 206 100% 23%;
-    --secondary-foreground: 0 0% 100%;
+    /* Secondary Button - Dark mode */
+    --secondary: 209 40% 20%; /* Darker for dark mode */
+    --secondary-foreground: 209 65% 90%;
+    --secondary-border: 209 40% 25%;
+    --secondary-hover: 209 40% 25%;
+    --secondary-active: 209 40% 30%;
+
+    /* Tertiary Button - Dark mode */
+    --tertiary: 207 20% 15%;
+    --tertiary-foreground: 209 65% 90%;
+    --tertiary-border: 209 25% 25%;
+    --tertiary-hover: 207 20% 20%;
+    --tertiary-active: 207 20% 25%;
 
     --muted: 206 50% 20%;
     --muted-foreground: 210 20% 65%;
 
-    --accent: 206 100% 33%;
+    --accent: 204 100% 31%;
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 84% 60%;
@@ -83,7 +111,7 @@ All colors MUST be HSL.
 
     --border: 206 50% 20%;
     --input: 206 50% 20%;
-    --ring: 206 100% 33%;
+    --ring: 204 100% 31%;
     --sidebar-background: 240 5.9% 10%;
     --sidebar-foreground: 240 4.8% 95.9%;
     --sidebar-primary: 224.3 76.3% 48%;

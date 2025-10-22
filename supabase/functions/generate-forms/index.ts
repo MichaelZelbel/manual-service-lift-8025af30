@@ -80,9 +80,9 @@ Deno.serve(async (req) => {
       forms: [],
     };
 
-    // Parse BPMN
+    // Parse BPMN (deno_dom only supports 'text/html', but it parses XML fine)
     const parser = new DOMParser();
-    const xmlDoc = parser.parseFromString(bpmnXml, 'text/xml');
+    const xmlDoc = parser.parseFromString(bpmnXml, 'text/html');
     if (!xmlDoc) {
       throw new Error('Failed to parse BPMN XML');
     }
@@ -364,7 +364,7 @@ function addFormDefinitionToBpmn(
   elementType: string
 ): string {
   const parser = new DOMParser();
-  const xmlDoc = parser.parseFromString(bpmnXml, 'text/xml');
+  const xmlDoc = parser.parseFromString(bpmnXml, 'text/html');
   
   if (!xmlDoc) return bpmnXml;
   

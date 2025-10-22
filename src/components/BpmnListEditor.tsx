@@ -332,9 +332,42 @@ export function BpmnListEditor({
     await performSwap(String(active.id), String(over.id));
   };
 
-  // Handle Edit Subprocess - Simplified to avoid type issues
+  // Handle Edit Subprocess
   const handleEditSubprocess = async (elementId: string) => {
-    toast.info("Subprocess navigation coming soon");
+    try {
+      const elementRegistry = modeler.get("elementRegistry") as any;
+      const element = elementRegistry.get(elementId);
+      
+      if (!element || element.type !== "bpmn:CallActivity") {
+        toast.error("Element is not a subprocess call");
+        return;
+      }
+
+      // Get the called element reference (subprocess name)
+      const calledElement = element.businessObject?.calledElement;
+      if (!calledElement) {
+        toast.error("No subprocess reference found");
+        return;
+      }
+
+      // Query the subprocess by name (calledElement is usually the process ID/name)
+      const { data: subprocess, error } = await supabase
+        .from("subprocesses")
+        .select("id")
+        .eq("service_id", entityId)
+        .ilike("name", `%${calledElement}%`)
+        .single();
+
+      if (error || !subprocess) {
+        toast.error("Subprocess not found in database");
+        return;
+      }
+
+      navigate(`/subprocess/${subprocess.id}`);
+    } catch (error) {
+      console.error("Error navigating to subprocess:", error);
+      toast.error("Failed to open subprocess");
+    }
   };
 
   // Undo

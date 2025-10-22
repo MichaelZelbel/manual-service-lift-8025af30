@@ -12,6 +12,7 @@ import { Progress } from "@/components/ui/progress";
 import { CheckCircle2, Download } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { ExportResultsPanel } from "./ExportResultsPanel";
 
 interface ExportModalProps {
   open: boolean;
@@ -51,6 +52,7 @@ export function ExportModal({
   const [currentStep, setCurrentStep] = useState("");
   const [isComplete, setIsComplete] = useState(false);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
+  const [showResults, setShowResults] = useState(false);
 
   const handleClose = () => {
     if (!isProcessing) {
@@ -61,6 +63,7 @@ export function ExportModal({
         setProgress(0);
         setCurrentStep("");
         setDownloadUrl(null);
+        setShowResults(false);
       }, 200);
     }
   };
@@ -151,6 +154,12 @@ export function ExportModal({
 
       setDownloadUrl(downloadUrl);
       setIsComplete(true);
+      
+      // Show results panel for export
+      if (type === "export") {
+        setShowResults(true);
+      }
+      
       toast.success(
         type === "export"
           ? "Export completed successfully!"
@@ -176,7 +185,7 @@ export function ExportModal({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-[520px]">
+      <DialogContent className={showResults ? "sm:max-w-[900px]" : "sm:max-w-[520px]"}>
         <DialogHeader>
           <DialogTitle>
             {type === "export" ? "Export Options" : "Run Backend Analysis"}
@@ -259,7 +268,7 @@ export function ExportModal({
             </div>
           )}
 
-          {isComplete && (
+          {isComplete && !showResults && (
             <div className="space-y-4">
               <div className="flex flex-col items-center justify-center py-6 space-y-3">
                 <CheckCircle2 className="h-16 w-16 text-green-600" />
@@ -275,9 +284,29 @@ export function ExportModal({
                 <Button variant="outline" onClick={handleClose}>
                   Close
                 </Button>
-                <Button onClick={handleDownload}>
-                  <Download className="h-4 w-4 mr-2" />
-                  Download {type === "export" ? "Package (.zip)" : "Report (.pdf)"}
+                {type === "export" ? (
+                  <Button onClick={() => setShowResults(true)}>
+                    View Generated Files
+                  </Button>
+                ) : (
+                  <Button onClick={handleDownload}>
+                    <Download className="h-4 w-4 mr-2" />
+                    Download Report (.pdf)
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {isComplete && showResults && type === "export" && (
+            <div className="space-y-4">
+              <ExportResultsPanel 
+                serviceId={serviceId}
+                serviceName={serviceName}
+              />
+              <div className="flex justify-end gap-3 pt-4">
+                <Button variant="outline" onClick={handleClose}>
+                  Close
                 </Button>
               </div>
             </div>

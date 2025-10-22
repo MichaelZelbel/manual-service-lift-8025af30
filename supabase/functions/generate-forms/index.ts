@@ -274,17 +274,82 @@ Deno.serve(async (req) => {
       bpmnFiles['manual-service.bpmn'] = updatedBpmnXml;
     }
 
-    // Create ZIP package
+    // Create folder structure for this export
+    const exportFolder = `${serviceId}/${Date.now()}`;
+    
+    // Create enhanced manifest with BPMN subprocess info
+    const enhancedManifest = {
+      serviceExternalId: serviceId,
+      serviceName: service.name,
+      generatedAt: manifest.generatedAt,
+      bpmn: {
+        main: { filename: 'manual-service.bpmn' },
+        subprocesses: (subprocesses || []).map((sp, idx) => ({
+          stepExternalId: `STEP-${String(idx + 1).padStart(2, '0')}`,
+          subprocessId: sp.id,
+          calledElement: `Process_Sub_${sp.id.substring(0, 8)}`,
+          filename: `subprocesses/subprocess-${sanitizeFilename(sp.name)}.bpmn`,
+          taskName: sp.name
+        }))
+      },
+      forms: manifest.forms
+    };
+
+    // Upload all individual files
+    // 1. Main BPMN
+    if (generateBpmn) {
+      await supabase.storage
+        .from('exports')
+        .upload(
+          `${exportFolder}/manual-service.bpmn`,
+          bpmnFiles['manual-service.bpmn'],
+          { contentType: 'application/xml', upsert: true }
+        );
+      
+      // 2. Subprocess BPMNs
+      for (const [filename, content] of Object.entries(bpmnFiles)) {
+        if (filename !== 'manual-service.bpmn') {
+          await supabase.storage
+            .from('exports')
+            .upload(
+              `${exportFolder}/subprocesses/${filename}`,
+              content,
+              { contentType: 'application/xml', upsert: true }
+            );
+        }
+      }
+    }
+
+    // 3. Forms
+    for (const [filename, content] of Object.entries(forms)) {
+      await supabase.storage
+        .from('exports')
+        .upload(
+          `${exportFolder}/forms/${filename}`,
+          content,
+          { contentType: 'application/json', upsert: true }
+        );
+    }
+
+    // 4. Manifest
+    await supabase.storage
+      .from('exports')
+      .upload(
+        `${exportFolder}/manifest.json`,
+        JSON.stringify(enhancedManifest, null, 2),
+        { contentType: 'application/json', upsert: true }
+      );
+
+    // 5. Also create ZIP package for easy download
     const zipBlob = await createZipPackage(
       bpmnFiles,
       forms,
-      manifest,
+      enhancedManifest,
       service.name,
       generateBpmn
     );
 
-    // Upload ZIP to storage
-    const zipFilename = `exports/${serviceId}/${Date.now()}/package.zip`;
+    const zipFilename = `${exportFolder}/package.zip`;
     const { error: uploadError } = await supabase.storage
       .from('exports')
       .upload(zipFilename, zipBlob, {
@@ -297,7 +362,7 @@ Deno.serve(async (req) => {
       throw new Error('Failed to upload package');
     }
 
-    // Generate signed URL
+    // Generate signed URL for ZIP
     const { data: urlData } = await supabase.storage
       .from('exports')
       .createSignedUrl(zipFilename, 3600);
@@ -553,24 +618,32 @@ function addFormDefinitionToBpmn(
 async function createZipPackage(
   bpmnFiles: Record<string, string>,
   forms: Record<string, string>,
-  manifest: ManifestData,
+  manifest: any,
   serviceName: string,
   includeBpmn: boolean
 ): Promise<Uint8Array> {
   const zip = new JSZip();
   
-  // Add all BPMN files
+  // Add main BPMN
+  if (includeBpmn && bpmnFiles['manual-service.bpmn']) {
+    zip.file('manual-service.bpmn', bpmnFiles['manual-service.bpmn']);
+    console.log('Added to ZIP: manual-service.bpmn');
+  }
+  
+  // Add subprocess BPMNs in subprocesses folder
   if (includeBpmn) {
     for (const [filename, content] of Object.entries(bpmnFiles)) {
-      zip.file(filename, content);
-      console.log('Added to ZIP:', filename);
+      if (filename !== 'manual-service.bpmn') {
+        zip.file(`subprocesses/${filename}`, content);
+        console.log('Added to ZIP:', `subprocesses/${filename}`);
+      }
     }
   }
   
-  // Add form files
+  // Add form files in forms folder
   for (const [filename, content] of Object.entries(forms)) {
-    zip.file(filename, content);
-    console.log('Added to ZIP:', filename);
+    zip.file(`forms/${filename}`, content);
+    console.log('Added to ZIP:', `forms/${filename}`);
   }
   
   zip.file('manifest.json', JSON.stringify(manifest, null, 2));

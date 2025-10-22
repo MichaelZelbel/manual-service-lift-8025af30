@@ -73,6 +73,14 @@ Deno.serve(async (req) => {
       .eq('service_id', serviceId)
       .order('step_order');
 
+    // Fetch subprocesses
+    const { data: subprocesses } = await supabase
+      .from('subprocesses')
+      .select('*')
+      .eq('service_id', serviceId);
+
+    console.log('Fetched subprocesses:', subprocesses?.length || 0);
+
     const timestamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+/, '').replace('T', 'T');
     const manifest: ManifestData = {
       service: service.name,
@@ -88,71 +96,114 @@ Deno.serve(async (req) => {
     }
 
     const forms: Record<string, string> = {};
+    const bpmnFiles: Record<string, string> = {};
     let updatedBpmnXml = bpmnXml;
+
+    // Add main BPMN to files
+    if (generateBpmn) {
+      bpmnFiles['manual-service.bpmn'] = bpmnXml;
+      
+      // Add subprocess BPMNs
+      if (subprocesses && subprocesses.length > 0) {
+        for (const subprocess of subprocesses) {
+          const subBpmn = subprocess.edited_bpmn_xml || subprocess.original_bpmn_xml;
+          if (subBpmn) {
+            const filename = `subprocess-${sanitizeFilename(subprocess.name)}.bpmn`;
+            bpmnFiles[filename] = subBpmn;
+            console.log('Added subprocess BPMN:', filename);
+          }
+        }
+      }
+    }
 
     if (generateForms) {
       // Load form templates
       const templates = await loadFormTemplates(supabase);
       
-      // Get ordered elements from BPMN
+      // Get ordered elements from main BPMN
       const orderedElements = getOrderedBpmnElements(xmlDoc);
       
-      // Generate forms and update BPMN
+      // Generate form for start event
       let formIndex = 0;
       for (const element of orderedElements) {
         const elementId = element.getAttribute('id') || '';
         const elementName = element.getAttribute('name') || elementId;
         const elementType = element.tagName;
 
-        let templateType: string | null = null;
-        let formFilename: string;
-        let formId: string;
-
-        // Determine if this is start event or user task
         if (elementType === 'bpmn:startEvent') {
-          // Start event - always use First Step template
+          // Start event - use First Step template
           const templateKey = determineStartTemplate(element, xmlDoc);
-          templateType = templateKey;
-          formFilename = '000-start.form';
-          formId = `000-start-${timestamp}`;
-        } else if (elementType === 'bpmn:userTask') {
-          // User task - use Next Step template
-          const templateKey = determineUserTaskTemplate(element, xmlDoc);
-          templateType = templateKey;
-          const paddedIndex = String(formIndex + 1).padStart(3, '0');
-          const slug = sanitizeFilename(elementName);
-          formFilename = `${paddedIndex}-${slug}.form`;
-          formId = `${paddedIndex}-${slug}-${timestamp}`;
-          formIndex++;
-        } else {
-          continue; // Skip non-form elements
-        }
+          const formFilename = '000-start.form';
+          const formId = `000-start-${timestamp}`;
 
-        if (templateType && templates[templateType]) {
-          // Generate form
-          const formJson = await generateFormJson(
-            templates[templateType],
-            {
-              serviceName: service.name,
-              stepName: elementName,
-              stepDescription: getStepDescription(elementId, serviceSteps),
-              nextTasks: getNextTasks(element, xmlDoc),
-              references: getReferences(elementId, mdsData),
+          if (templates[templateKey]) {
+            const formJson = await generateFormJson(
+              templates[templateKey],
+              {
+                serviceName: service.name,
+                stepName: elementName,
+                stepDescription: 'Initial process step',
+                nextTasks: getNextTasks(element, xmlDoc),
+                references: '',
+                formId,
+              }
+            );
+
+            forms[formFilename] = formJson;
+            manifest.forms.push({
+              nodeId: elementId,
+              name: elementName,
+              filename: formFilename,
               formId,
-            }
-          );
+              templateType: templateKey,
+            });
 
-          forms[formFilename] = formJson;
-          manifest.forms.push({
-            nodeId: elementId,
-            name: elementName,
-            filename: formFilename,
-            formId,
-            templateType,
-          });
+            // Update BPMN with form definition
+            updatedBpmnXml = addFormDefinitionToBpmn(updatedBpmnXml, elementId, formId, elementType);
+            console.log('Generated form for start event');
+          }
+        }
+      }
 
-          // Update BPMN with form definition
-          updatedBpmnXml = addFormDefinitionToBpmn(updatedBpmnXml, elementId, formId, elementType);
+      // Generate forms for each subprocess
+      if (subprocesses && subprocesses.length > 0) {
+        for (let i = 0; i < subprocesses.length; i++) {
+          const subprocess = subprocesses[i];
+          const paddedIndex = String(i + 1).padStart(3, '0');
+          const slug = sanitizeFilename(subprocess.name);
+          const formFilename = `${paddedIndex}-${slug}.form`;
+          const formId = `${paddedIndex}-${slug}-${timestamp}`;
+
+          // Determine template based on subprocess structure
+          const templateKey = 'NEXT_STEP_SINGLE'; // Default to single path for subprocesses
+
+          if (templates[templateKey]) {
+            // Get step description and references
+            const step = serviceSteps?.find(s => s.subprocess_id === subprocess.id);
+            const mdsStep = mdsData?.find(m => m.step_external_id === subprocess.id);
+
+            const formJson = await generateFormJson(
+              templates[templateKey],
+              {
+                serviceName: service.name,
+                stepName: subprocess.name,
+                stepDescription: step?.description || '',
+                nextTasks: [],
+                references: mdsStep ? getReferencesFromMds(mdsStep) : '',
+                formId,
+              }
+            );
+
+            forms[formFilename] = formJson;
+            manifest.forms.push({
+              nodeId: subprocess.id,
+              name: subprocess.name,
+              filename: formFilename,
+              formId,
+              templateType: templateKey,
+            });
+            console.log('Generated form for subprocess:', subprocess.name);
+          }
         }
       }
     }
@@ -167,7 +218,7 @@ Deno.serve(async (req) => {
 
     // Create ZIP package
     const zipBlob = await createZipPackage(
-      updatedBpmnXml,
+      bpmnFiles,
       forms,
       manifest,
       service.name,
@@ -322,13 +373,17 @@ function getNextTasks(element: any, xmlDoc: any): string[] {
   return tasks;
 }
 
+function getReferencesFromMds(mdsStep: any): string {
+  const refs: string[] = [];
+  if (mdsStep.sop_urls) refs.push(mdsStep.sop_urls);
+  if (mdsStep.decision_sheet_urls) refs.push(mdsStep.decision_sheet_urls);
+  return refs.join(', ');
+}
+
 function getReferences(elementId: string, mdsData: any[] | null): string {
   if (!mdsData) return '';
   const step = mdsData.find(s => s.step_external_id === elementId);
-  const refs: string[] = [];
-  if (step?.sop_urls) refs.push(step.sop_urls);
-  if (step?.decision_sheet_urls) refs.push(step.decision_sheet_urls);
-  return refs.join(', ');
+  return step ? getReferencesFromMds(step) : '';
 }
 
 async function generateFormJson(
@@ -403,7 +458,7 @@ function addFormDefinitionToBpmn(
 }
 
 async function createZipPackage(
-  bpmnXml: string,
+  bpmnFiles: Record<string, string>,
   forms: Record<string, string>,
   manifest: ManifestData,
   serviceName: string,
@@ -411,12 +466,18 @@ async function createZipPackage(
 ): Promise<Uint8Array> {
   const zip = new JSZip();
   
+  // Add all BPMN files
   if (includeBpmn) {
-    zip.file('manual-service.bpmn', bpmnXml);
+    for (const [filename, content] of Object.entries(bpmnFiles)) {
+      zip.file(filename, content);
+      console.log('Added to ZIP:', filename);
+    }
   }
   
+  // Add form files
   for (const [filename, content] of Object.entries(forms)) {
     zip.file(filename, content);
+    console.log('Added to ZIP:', filename);
   }
   
   zip.file('manifest.json', JSON.stringify(manifest, null, 2));

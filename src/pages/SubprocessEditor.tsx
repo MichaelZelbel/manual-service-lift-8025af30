@@ -22,6 +22,8 @@ export default function SubprocessEditor() {
   const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState(searchParams.get("tab") || "graphical");
   const [serviceId, setServiceId] = useState<string | null>(null);
+  const [stepName, setStepName] = useState<string>("");
+  const [processName, setProcessName] = useState<string>("");
 
   const bpmn = useBpmnModeler({
     entityId: id!,
@@ -29,24 +31,40 @@ export default function SubprocessEditor() {
   });
 
   useEffect(() => {
-    const fetchServiceId = async () => {
+    const fetchMetadata = async () => {
       if (!id) return;
       
-      const { data, error } = await supabase
+      // Fetch subprocess and service_id
+      const { data: subprocessData, error: subprocessError } = await supabase
         .from("subprocesses")
-        .select("service_id")
+        .select("service_id, name")
         .eq("id", id)
         .single();
 
-      if (error) {
-        console.error("Error fetching service_id:", error);
+      if (subprocessError) {
+        console.error("Error fetching subprocess:", subprocessError);
         return;
       }
 
-      setServiceId(data.service_id);
+      setServiceId(subprocessData.service_id);
+      setStepName(subprocessData.name);
+
+      // Fetch process name
+      const { data: serviceData, error: serviceError } = await supabase
+        .from("manual_services")
+        .select("name")
+        .eq("id", subprocessData.service_id)
+        .single();
+
+      if (serviceError) {
+        console.error("Error fetching service name:", serviceError);
+        return;
+      }
+
+      setProcessName(serviceData.name);
     };
 
-    fetchServiceId();
+    fetchMetadata();
   }, [id]);
 
   const handleBackClick = () => {
@@ -155,7 +173,9 @@ export default function SubprocessEditor() {
               <h1 className="text-2xl font-bold text-foreground">
                 Subprocess Editor
               </h1>
-              <p className="text-sm text-muted-foreground">Subprocess ID: {id}</p>
+              <p className="text-sm text-muted-foreground">
+                {stepName} {processName && `(${processName})`}
+              </p>
             </div>
           </div>
           <div className="flex gap-2">

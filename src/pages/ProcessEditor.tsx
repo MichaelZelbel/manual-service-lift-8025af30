@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -9,6 +9,7 @@ import { SubprocessList } from "@/components/SubprocessList";
 import { ExportModal } from "@/components/ExportModal";
 import { useBpmnModeler } from "@/hooks/useBpmnModeler";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 import {
   ArrowLeft,
   Download,
@@ -23,11 +24,33 @@ export default function ProcessEditor() {
   const navigate = useNavigate();
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("list");
+  const [processName, setProcessName] = useState<string>("");
 
   const bpmn = useBpmnModeler({
     entityId: id!,
     entityType: "service",
   });
+
+  useEffect(() => {
+    const fetchProcessName = async () => {
+      if (!id) return;
+      
+      const { data, error } = await supabase
+        .from("manual_services")
+        .select("name")
+        .eq("id", id)
+        .single();
+
+      if (error) {
+        console.error("Error fetching process name:", error);
+        return;
+      }
+
+      setProcessName(data.name);
+    };
+
+    fetchProcessName();
+  }, [id]);
 
   const handleImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -128,7 +151,7 @@ export default function ProcessEditor() {
                 Process Editor
               </h1>
               <p className="text-sm text-muted-foreground">
-                Service ID: {id}
+                {processName || id}
               </p>
             </div>
           </div>

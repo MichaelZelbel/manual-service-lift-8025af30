@@ -221,6 +221,7 @@ Deno.serve(async (req) => {
         name: row.step_name,
         type: row.type || 'regular',
         candidate_group: row.candidate_group,
+        process_step: row.process_step,
         sop_texts,
         pdf_urls: allUrls
       };
@@ -294,6 +295,10 @@ Return only valid BPMN 2.0 XML, no other text.`;
 
     console.log('Generating main process BPMN...');
     
+    // Identify first steps
+    const firstSteps = stepsInfo.filter((step: any) => step.process_step === 1);
+    const hasMultipleFirstSteps = firstSteps.length > 1;
+    
     // Generate main process with callActivities
     const mainPrompt = `Create a main BPMN process that orchestrates the following steps using callActivities.
 
@@ -303,7 +308,15 @@ Performing Team: ${serviceData.performing_team}
 Performer Org: ${serviceData.performer_org}
 
 Steps (in order):
-${stepsInfo.map((step: any, idx: number) => `${idx + 1}. ${step.name} (${step.type}${step.candidate_group ? ', group: ' + step.candidate_group : ''})`).join('\n')}
+${stepsInfo.map((step: any, idx: number) => `${idx + 1}. ${step.name} (${step.type}${step.candidate_group ? ', group: ' + step.candidate_group : ''})${step.process_step === 1 ? ' [FIRST STEP]' : ''}`).join('\n')}
+
+${hasMultipleFirstSteps ? `
+IMPORTANT: Multiple steps are marked as FIRST STEPS. You MUST:
+1. After the startEvent, create an bpmn:inclusiveGateway
+2. Connect the startEvent to this inclusiveGateway
+3. Connect the inclusiveGateway to ALL steps marked as [FIRST STEP]: ${firstSteps.map((s: any) => s.name).join(', ')}
+4. These parallel branches should converge later in the process flow
+` : ''}
 
 Instructions:
 - Use process id="Process_Main_${service_external_id}" name="${serviceData.name}" isExecutable="true"
@@ -313,7 +326,7 @@ Instructions:
       <zeebe:calledElement processId="Process_Sub_[step_external_id]" propagateAllChildVariables="false" />
     </bpmn:extensionElements>
   </bpmn:callActivity>
-- If branching is implied by step names, add exclusive gateways
+- If branching is implied by step names or multiple first steps exist, add appropriate gateways (inclusiveGateway for multiple first steps)
 - Otherwise connect steps sequentially
 - Include ONE bpmn:startEvent at the beginning
 - Include ONE bpmn:endEvent at the end
@@ -324,6 +337,7 @@ CRITICAL: Include complete <bpmndi:BPMNDiagram> section:
 - Use dimensions: callActivities (100x80), events (36x36), gateways (50x50)
 - StartEvent at x=152, y=102
 - CallActivities at y=80 with height=80
+- If using inclusiveGateway for multiple first steps, position it at x=250 between start and first callActivities
 - Include BPMNShape for every element and BPMNEdge for every sequence flow with proper waypoints
 
 Use proper Camunda 8 namespaces (zeebe, not camunda).

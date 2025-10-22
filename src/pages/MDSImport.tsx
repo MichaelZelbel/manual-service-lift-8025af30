@@ -19,6 +19,7 @@ interface MDSRow {
   candidate_group?: string;
   sop_urls?: string;
   decision_sheet_urls?: string;
+  process_step?: number;
 }
 
 interface JobStatus {
@@ -252,6 +253,14 @@ const MDSImport = () => {
       // Candidate Group
       else if (header.includes('candidate') && header.includes('group')) {
         row.candidate_group = value;
+      }
+      
+      // Process Step (first step indicator)
+      else if (header.includes('process') && header.includes('step') && !header.includes('id') && !header.includes('name')) {
+        const numValue = parseInt(value);
+        if (!isNaN(numValue)) {
+          row.process_step = numValue;
+        }
       }
       
       // URL to SOP/Decision Sheet

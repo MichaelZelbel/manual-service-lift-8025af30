@@ -261,6 +261,7 @@ export type Database = {
           imported_at: string | null
           performer_org: string
           performing_team: string
+          process_step: number | null
           row_hash: string
           service_external_id: string
           service_name: string
@@ -276,6 +277,7 @@ export type Database = {
           imported_at?: string | null
           performer_org: string
           performing_team: string
+          process_step?: number | null
           row_hash: string
           service_external_id: string
           service_name: string
@@ -291,6 +293,7 @@ export type Database = {
           imported_at?: string | null
           performer_org?: string
           performing_team?: string
+          process_step?: number | null
           row_hash?: string
           service_external_id?: string
           service_name?: string

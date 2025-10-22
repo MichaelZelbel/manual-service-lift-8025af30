@@ -12,7 +12,7 @@ import { ManifestViewModal } from "./ManifestViewModal";
 
 interface ExportFile {
   name: string;
-  type: 'bpmn-main' | 'bpmn-sub' | 'form' | 'meta' | 'unknown';
+  type: 'bpmn-main' | 'bpmn-sub' | 'form' | 'meta' | 'zip' | 'unknown';
   signedUrl: string;
   stepExternalId?: string;
   taskName?: string;
@@ -81,10 +81,13 @@ export function ExportResultsPanel({ serviceId, serviceName }: ExportResultsPane
   };
 
   const handleDownloadZip = async () => {
-    toast.info('Preparing ZIP package...');
-    // The ZIP should already exist in storage, we can fetch it
-    // For now, just show a message
-    toast.success('ZIP download started');
+    const zipFile = files.find(f => f.type === 'zip' || f.name === 'package.zip');
+    if (zipFile?.signedUrl) {
+      window.open(zipFile.signedUrl, '_blank');
+      toast.success('Downloading ZIP package');
+    } else {
+      toast.error('ZIP package not available');
+    }
   };
 
   const getFileBadge = (type: string) => {

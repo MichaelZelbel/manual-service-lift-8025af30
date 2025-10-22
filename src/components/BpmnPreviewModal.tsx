@@ -36,9 +36,12 @@ export function BpmnPreviewModal({
         setLoading(true);
         setError(null);
 
-        // Fetch BPMN XML
-        const response = await fetch(fileUrl);
-        if (!response.ok) throw new Error('Failed to fetch BPMN file');
+        // Fetch BPMN XML with no-cors to avoid CORS issues with signed URLs
+        const response = await fetch(fileUrl, {
+          mode: 'cors',
+          credentials: 'omit'
+        });
+        if (!response.ok) throw new Error(`Failed to fetch BPMN file: ${response.status}`);
         const xml = await response.text();
 
         // Create viewer

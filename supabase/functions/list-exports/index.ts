@@ -65,40 +65,78 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Generate signed URLs for all files
+    // Generate signed URLs for all files (including subdirectories)
     const files = [];
     for (const file of filesData || []) {
       if (file.name === '.emptyFolderPlaceholder') continue;
 
+      // Check if it's a directory (has no id, or in Supabase storage terms, has metadata indicating it's a folder)
+      // Directories typically have no 'id' or their name doesn't have an extension
+      const isDirectory = !file.id || file.name === 'subprocesses' || file.name === 'forms';
+      
+      if (isDirectory) {
+        // List files within subdirectory
+        const subPath = `${folderPath}/${file.name}`;
+        const { data: subFiles } = await supabase.storage
+          .from('exports')
+          .list(subPath, { limit: 1000 });
+        
+        for (const subFile of subFiles || []) {
+          if (subFile.name === '.emptyFolderPlaceholder') continue;
+          
+          const subFilePath = `${subPath}/${subFile.name}`;
+          const { data: urlData } = await supabase.storage
+            .from('exports')
+            .createSignedUrl(subFilePath, 3600);
+
+          let fileType = 'unknown';
+          let metadata = {};
+
+          const relativeName = `${file.name}/${subFile.name}`;
+          
+          if (relativeName.startsWith('subprocesses/') && relativeName.endsWith('.bpmn')) {
+            fileType = 'bpmn-sub';
+            if (manifest?.bpmn?.subprocesses) {
+              const subInfo = manifest.bpmn.subprocesses.find((s: any) => 
+                relativeName.includes(s.filename) || s.filename.includes(relativeName)
+              );
+              if (subInfo) {
+                metadata = {
+                  stepExternalId: subInfo.stepExternalId,
+                  taskName: subInfo.taskName,
+                  calledElement: subInfo.calledElement
+                };
+              }
+            }
+          } else if (relativeName.startsWith('forms/') && relativeName.endsWith('.form')) {
+            fileType = 'form';
+          }
+
+          files.push({
+            name: relativeName,
+            type: fileType,
+            signedUrl: urlData?.signedUrl || '',
+            ...metadata
+          });
+        }
+        continue;
+      }
+
+      // Handle files at the root level
       const filePath = `${folderPath}/${file.name}`;
       const { data: urlData } = await supabase.storage
         .from('exports')
-        .createSignedUrl(filePath, 3600); // 1 hour expiry
+        .createSignedUrl(filePath, 3600);
 
       let fileType = 'unknown';
       let metadata = {};
 
       if (file.name === 'manual-service.bpmn') {
         fileType = 'bpmn-main';
-      } else if (file.name.startsWith('subprocesses/') && file.name.endsWith('.bpmn')) {
-        fileType = 'bpmn-sub';
-        // Try to find corresponding subprocess info from manifest
-        if (manifest?.bpmn?.subprocesses) {
-          const subInfo = manifest.bpmn.subprocesses.find((s: any) => 
-            file.name.includes(s.filename) || s.filename.includes(file.name)
-          );
-          if (subInfo) {
-            metadata = {
-              stepExternalId: subInfo.stepExternalId,
-              taskName: subInfo.taskName,
-              calledElement: subInfo.calledElement
-            };
-          }
-        }
-      } else if (file.name.startsWith('forms/') && file.name.endsWith('.form')) {
-        fileType = 'form';
       } else if (file.name === 'manifest.json') {
         fileType = 'meta';
+      } else if (file.name === 'package.zip') {
+        fileType = 'zip';
       }
 
       files.push({

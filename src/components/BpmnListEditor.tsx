@@ -562,6 +562,7 @@ export function BpmnListEditor({
       const modeling = modeler.get("modeling") as any;
       const elementFactory = modeler.get("elementFactory") as any;
       const elementRegistry = modeler.get("elementRegistry") as any;
+      const bpmnFactory = modeler.get("bpmnFactory") as any;
       
       // Find a good position for the new element (to the right of existing elements)
       const allElements = elementRegistry.getAll();
@@ -574,12 +575,15 @@ export function BpmnListEditor({
       
       const position = { x: maxX + 150, y: 200 };
       
-      // Create the new element
+      // Create proper business object using bpmnFactory
+      const businessObject = bpmnFactory.create(newNodeType, {
+        name: newNodeName
+      });
+      
+      // Create the shape with the proper business object
       const shape = elementFactory.createShape({
         type: newNodeType,
-        businessObject: {
-          name: newNodeName
-        }
+        businessObject: businessObject
       });
       
       // Get the process element (parent container)

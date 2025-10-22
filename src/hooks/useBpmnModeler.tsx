@@ -56,6 +56,23 @@ export function useBpmnModeler({ entityId, entityType, onAutoSave }: UseBpmnMode
     return xml;
   };
 
+  // Detect corrupted XML (HTML-wrapped or lowercased BPMN tags/attrs)
+  const isCorruptedXml = (xml: string): boolean => {
+    const lc = xml.toLowerCase();
+    return (
+      lc.includes('<html') ||
+      lc.includes('<body') ||
+      lc.includes('<bpmn:startevent') ||
+      lc.includes('targetnamespace=') ||
+      lc.includes('exporterversion=') ||
+      lc.includes('isexecutable=') ||
+      lc.includes('<bpmndi:bpmndiagram') ||
+      lc.includes('<dc:bounds') ||
+      lc.includes('sourceref=') ||
+      lc.includes('targetref=')
+    );
+  };
+
   // Load XML from database
   const loadXml = useCallback(
     async (xml: string) => {
@@ -158,8 +175,26 @@ export function useBpmnModeler({ entityId, entityType, onAutoSave }: UseBpmnMode
 
         if (error) throw error;
 
-        const xml = data.edited_bpmn_xml || data.original_bpmn_xml || "";
-        if (!xml) {
+        const edited = (data.edited_bpmn_xml as string | null) || null;
+        const original = (data.original_bpmn_xml as string | null) || null;
+        let xmlToLoad = edited || original || "";
+
+        // If edited XML looks corrupted (HTML-wrapped or lowercased), fall back to original
+        if (edited && isCorruptedXml(edited) && original) {
+          xmlToLoad = original;
+          try {
+            const { supabase } = await import("@/integrations/supabase/client");
+            await supabase
+              .from(tableName)
+              .update({ edited_bpmn_xml: null })
+              .eq("id", entityId);
+            toast.info("Recovered diagram from original version");
+          } catch (e) {
+            console.warn("Failed to clear corrupted edited_bpmn_xml:", e);
+          }
+        }
+
+        if (!xmlToLoad) {
           // No BPMN present yet (e.g., generation still running). Initialize a blank diagram
           try {
             await modeler.createDiagram();
@@ -180,7 +215,7 @@ export function useBpmnModeler({ entityId, entityType, onAutoSave }: UseBpmnMode
           throw new Error("No BPMN diagram found");
         }
 
-        await loadXml(xml);
+        await loadXml(xmlToLoad);
       } catch (err) {
         console.error("Error loading initial XML:", err);
         setError("Failed to load BPMN diagram");

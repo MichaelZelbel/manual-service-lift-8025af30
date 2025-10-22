@@ -205,7 +205,7 @@ export function BpmnListEditor({
     }
   }, []);
 
-  // Perform BPMN-aware swap by element IDs - safely rewire connections and swap positions
+  // Perform BPMN-aware swap by element IDs - capture all connections, delete, swap, recreate
   const performSwap = useCallback(async (idA: string, idB: string) => {
     if (!modeler || idA === idB) return;
 
@@ -222,77 +222,103 @@ export function BpmnListEditor({
 
       console.log("BpmnListEditor: Swapping", idA, "<->", idB);
 
-      // Clone current connections
-      const incomingA = [...(shapeA.incoming || [])];
-      const outgoingA = [...(shapeA.outgoing || [])];
-      const incomingB = [...(shapeB.incoming || [])];
-      const outgoingB = [...(shapeB.outgoing || [])];
+      // Capture all connections and their properties
+      const connectionsToRecreate: Array<{
+        source: any;
+        target: any;
+        properties: any;
+      }> = [];
 
-      // Detect direct connections between A and B
-      const directAB = outgoingA.find((f: any) => f.target === shapeB) || null; // A -> B
-      const directBA = outgoingB.find((f: any) => f.target === shapeA) || null; // B -> A
-
-      const processed = new Set<string>();
-
-      // Rewire incoming flows to the opposite element (excluding direct/loops)
-      incomingA.forEach((flow: any) => {
-        if (processed.has(flow.id)) return;
-        if (flow.source === shapeB) return; // handled as directBA
-        if (flow.source === shapeA) return; // guard against self-loop
-        const endDock = flow.waypoints?.[flow.waypoints.length - 1];
-        modeling.reconnectEnd(flow, shapeB, endDock);
-        processed.add(flow.id);
+      // Capture incoming connections for A (source -> A becomes source -> B)
+      (shapeA.incoming || []).forEach((flow: any) => {
+        connectionsToRecreate.push({
+          source: flow.source,
+          target: shapeB, // will now point to B
+          properties: {
+            name: flow.businessObject?.name,
+            conditionExpression: flow.businessObject?.conditionExpression,
+          },
+        });
       });
 
-      incomingB.forEach((flow: any) => {
-        if (processed.has(flow.id)) return;
-        if (flow.source === shapeA) return; // handled as directAB
-        if (flow.source === shapeB) return; // guard against self-loop
-        const endDock = flow.waypoints?.[flow.waypoints.length - 1];
-        modeling.reconnectEnd(flow, shapeA, endDock);
-        processed.add(flow.id);
+      // Capture outgoing connections for A (A -> target becomes B -> target)
+      (shapeA.outgoing || []).forEach((flow: any) => {
+        connectionsToRecreate.push({
+          source: shapeB, // will now come from B
+          target: flow.target,
+          properties: {
+            name: flow.businessObject?.name,
+            conditionExpression: flow.businessObject?.conditionExpression,
+          },
+        });
       });
 
-      // Rewire outgoing flows to the opposite element (excluding direct/loops)
-      outgoingA.forEach((flow: any) => {
-        if (processed.has(flow.id)) return;
-        if (flow.target === shapeB) return; // handled as directAB
-        if (flow.target === shapeA) return; // guard against self-loop
-        const startDock = flow.waypoints?.[0];
-        modeling.reconnectStart(flow, shapeB, startDock);
-        processed.add(flow.id);
+      // Capture incoming connections for B (source -> B becomes source -> A)
+      (shapeB.incoming || []).forEach((flow: any) => {
+        connectionsToRecreate.push({
+          source: flow.source,
+          target: shapeA, // will now point to A
+          properties: {
+            name: flow.businessObject?.name,
+            conditionExpression: flow.businessObject?.conditionExpression,
+          },
+        });
       });
 
-      outgoingB.forEach((flow: any) => {
-        if (processed.has(flow.id)) return;
-        if (flow.target === shapeA) return; // handled as directBA
-        if (flow.target === shapeB) return; // guard against self-loop
-        const startDock = flow.waypoints?.[0];
-        modeling.reconnectStart(flow, shapeA, startDock);
-        processed.add(flow.id);
+      // Capture outgoing connections for B (B -> target becomes A -> target)
+      (shapeB.outgoing || []).forEach((flow: any) => {
+        connectionsToRecreate.push({
+          source: shapeA, // will now come from A
+          target: flow.target,
+          properties: {
+            name: flow.businessObject?.name,
+            conditionExpression: flow.businessObject?.conditionExpression,
+          },
+        });
       });
 
-      // Flip direct connections, if any
-      if (directAB) {
-        const startDock = directAB.waypoints?.[0];
-        const endDock = directAB.waypoints?.[directAB.waypoints.length - 1];
-        modeling.reconnectStart(directAB, shapeB, startDock);
-        modeling.reconnectEnd(directAB, shapeA, endDock);
-        processed.add(directAB.id);
-      }
-      if (directBA) {
-        const startDock = directBA.waypoints?.[0];
-        const endDock = directBA.waypoints?.[directBA.waypoints.length - 1];
-        modeling.reconnectStart(directBA, shapeA, startDock);
-        modeling.reconnectEnd(directBA, shapeB, endDock);
-        processed.add(directBA.id);
-      }
+      // Remove all existing connections
+      const allFlows = [
+        ...(shapeA.incoming || []),
+        ...(shapeA.outgoing || []),
+        ...(shapeB.incoming || []),
+        ...(shapeB.outgoing || []),
+      ];
+      const uniqueFlows = Array.from(new Set(allFlows.map((f: any) => f.id))).map((id) =>
+        allFlows.find((f: any) => f.id === id)
+      );
+      uniqueFlows.forEach((flow: any) => {
+        if (flow) modeling.removeConnection(flow);
+      });
 
-      // Swap positions to reflect order
+      // Swap positions
       const deltaAB = { x: shapeB.x - shapeA.x, y: shapeB.y - shapeA.y };
-      const deltaBA = { x: shapeA.x - shapeB.x, y: shapeA.y - shapeB.y };
+      const deltaBA = { x: -deltaAB.x, y: -deltaAB.y };
       modeling.moveElements([shapeA], deltaAB);
       modeling.moveElements([shapeB], deltaBA);
+
+      // Recreate all connections with fresh routing
+      connectionsToRecreate.forEach(({ source, target, properties }) => {
+        try {
+          const newConn = modeling.connect(source, target);
+          if (properties.name) {
+            modeling.updateProperties(newConn, { name: properties.name });
+          }
+          if (properties.conditionExpression) {
+            const moddle = modeler.get("moddle") as any;
+            const cond = properties.conditionExpression;
+            newConn.businessObject.conditionExpression = moddle.create(
+              cond.$type,
+              { body: cond.body, language: cond.language }
+            );
+          }
+        } catch (err) {
+          console.warn("Failed to recreate connection:", source.id, "->", target.id, err);
+        }
+      });
+
+      // Mark that graphical editor needs relayout
+      (modeler as any).__needsLayout = true;
 
       // Refresh list
       parseElements(modeler);

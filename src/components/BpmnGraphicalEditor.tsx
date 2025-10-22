@@ -49,7 +49,7 @@ export function BpmnGraphicalEditor({ modeler, activeTab }: BpmnGraphicalEditorP
     };
   }, [modeler]);
 
-  // Refresh canvas when switching to graphical tab
+  // Refresh canvas when switching to graphical tab and relayout connections if needed
   useEffect(() => {
     if (activeTab === "graphical" && modeler) {
       try {
@@ -58,6 +58,32 @@ export function BpmnGraphicalEditor({ modeler, activeTab }: BpmnGraphicalEditorP
         canvas._cachedViewbox = null;
         const currentViewbox = canvas.viewbox();
         canvas.viewbox(currentViewbox);
+
+        // Check if we need to relayout connections after a swap
+        if ((modeler as any).__needsLayout) {
+          const elementRegistry = modeler.get("elementRegistry") as any;
+          const modeling = modeler.get("modeling") as any;
+          
+          // Get all connections
+          const connections = elementRegistry.filter((el: any) => !!el.waypoints);
+          
+          // Relayout each connection
+          connections.forEach((connection: any) => {
+            try {
+              modeling.layoutConnection(connection);
+            } catch {
+              try {
+                modeling.updateWaypoints(connection, null);
+              } catch (err) {
+                console.warn("Failed to relayout connection:", connection.id, err);
+              }
+            }
+          });
+
+          // Clear the flag
+          (modeler as any).__needsLayout = false;
+          console.log("BpmnGraphicalEditor: Relayouted all connections after swap");
+        }
       } catch (error) {
         console.error("Error refreshing canvas:", error);
       }

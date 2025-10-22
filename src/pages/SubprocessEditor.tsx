@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -7,6 +7,7 @@ import { BpmnGraphicalEditor } from "@/components/BpmnGraphicalEditor";
 import { BpmnListEditor } from "@/components/BpmnListEditor";
 import { useBpmnModeler } from "@/hooks/useBpmnModeler";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 import {
   ArrowLeft,
   Download,
@@ -20,11 +21,41 @@ export default function SubprocessEditor() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState(searchParams.get("tab") || "graphical");
+  const [serviceId, setServiceId] = useState<string | null>(null);
 
   const bpmn = useBpmnModeler({
     entityId: id!,
     entityType: "subprocess",
   });
+
+  useEffect(() => {
+    const fetchServiceId = async () => {
+      if (!id) return;
+      
+      const { data, error } = await supabase
+        .from("subprocesses")
+        .select("service_id")
+        .eq("id", id)
+        .single();
+
+      if (error) {
+        console.error("Error fetching service_id:", error);
+        return;
+      }
+
+      setServiceId(data.service_id);
+    };
+
+    fetchServiceId();
+  }, [id]);
+
+  const handleBackClick = () => {
+    if (serviceId) {
+      navigate(`/process/${serviceId}?tab=list`);
+    } else {
+      navigate(-1);
+    }
+  };
 
   const handleImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -117,7 +148,7 @@ export default function SubprocessEditor() {
       <div className="container mx-auto">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
+            <Button variant="ghost" size="icon" onClick={handleBackClick}>
               <ArrowLeft className="h-5 w-5" />
             </Button>
             <div>

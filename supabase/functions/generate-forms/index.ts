@@ -259,7 +259,6 @@ Deno.serve(async (req) => {
           console.log('Generated form for subprocess:', subprocess.name);
         }
       }
-      }
     }
 
     // Save updated BPMN

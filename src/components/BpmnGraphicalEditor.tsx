@@ -36,7 +36,10 @@ export function BpmnGraphicalEditor({ modeler, activeTab }: BpmnGraphicalEditorP
       canvas.zoom("fit-viewport");
 
       // Attach properties panel (guard against missing module)
-      const propertiesPanel = modeler.get("propertiesPanel") as any;
+      let propertiesPanel: any = null;
+      try {
+        propertiesPanel = (modeler as any).get("propertiesPanel", false);
+      } catch {}
       if (propertiesPanel?.attachTo && propertiesPanelRef.current) {
         propertiesPanel.attachTo(propertiesPanelRef.current);
       }

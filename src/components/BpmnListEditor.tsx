@@ -222,74 +222,45 @@ export function BpmnListEditor({
 
       console.log("BpmnListEditor: Swapping", idA, "<->", idB);
 
-      // Capture all connections and their properties
-      const connectionsToRecreate: Array<{
-        source: any;
-        target: any;
-        properties: any;
-      }> = [];
+      // Helper: swap mapping for endpoints
+      const mapEndpoint = (node: any) => (node === shapeA ? shapeB : node === shapeB ? shapeA : node);
 
-      // Capture incoming connections for A (source -> A becomes source -> B)
-      (shapeA.incoming || []).forEach((flow: any) => {
-        connectionsToRecreate.push({
-          source: flow.source,
-          target: shapeB, // will now point to B
-          properties: {
-            name: flow.businessObject?.name,
-            conditionExpression: flow.businessObject?.conditionExpression,
-          },
-        });
-      });
-
-      // Capture outgoing connections for A (A -> target becomes B -> target)
-      (shapeA.outgoing || []).forEach((flow: any) => {
-        connectionsToRecreate.push({
-          source: shapeB, // will now come from B
-          target: flow.target,
-          properties: {
-            name: flow.businessObject?.name,
-            conditionExpression: flow.businessObject?.conditionExpression,
-          },
-        });
-      });
-
-      // Capture incoming connections for B (source -> B becomes source -> A)
-      (shapeB.incoming || []).forEach((flow: any) => {
-        connectionsToRecreate.push({
-          source: flow.source,
-          target: shapeA, // will now point to A
-          properties: {
-            name: flow.businessObject?.name,
-            conditionExpression: flow.businessObject?.conditionExpression,
-          },
-        });
-      });
-
-      // Capture outgoing connections for B (B -> target becomes A -> target)
-      (shapeB.outgoing || []).forEach((flow: any) => {
-        connectionsToRecreate.push({
-          source: shapeA, // will now come from A
-          target: flow.target,
-          properties: {
-            name: flow.businessObject?.name,
-            conditionExpression: flow.businessObject?.conditionExpression,
-          },
-        });
-      });
-
-      // Remove all existing connections
+      // Collect unique connections touching either shape
       const allFlows = [
         ...(shapeA.incoming || []),
         ...(shapeA.outgoing || []),
         ...(shapeB.incoming || []),
         ...(shapeB.outgoing || []),
       ];
-      const uniqueFlows = Array.from(new Set(allFlows.map((f: any) => f.id))).map((id) =>
-        allFlows.find((f: any) => f.id === id)
+      const uniqueFlows: any[] = Array.from(new Set(allFlows.map((f: any) => f.id))).map(
+        (id) => allFlows.find((f: any) => f.id === id)
       );
-      uniqueFlows.forEach((flow: any) => {
-        if (flow) modeling.removeConnection(flow);
+
+      // Capture connection specs with properties we want to preserve
+      type FlowSpec = {
+        source: any;
+        target: any;
+        name?: string;
+        conditionExpression?: any;
+        wasDefault?: boolean;
+      };
+      const toRecreate: FlowSpec[] = uniqueFlows.map((flow: any) => {
+        const src = flow.source;
+        const tgt = flow.target;
+        const bo = flow.businessObject || {};
+        const srcBo = src?.businessObject;
+        const wasDefault = !!(srcBo && srcBo.default && srcBo.default.id === bo.id);
+        return {
+          source: src,
+          target: tgt,
+          name: bo.name,
+          conditionExpression: bo.conditionExpression,
+          wasDefault,
+        } as FlowSpec;
       });
+
+      // Remove all existing connections
+      uniqueFlows.forEach((flow: any) => modeling.removeConnection(flow));
 
       // Swap positions
       const deltaAB = { x: shapeB.x - shapeA.x, y: shapeB.y - shapeA.y };
@@ -297,23 +268,44 @@ export function BpmnListEditor({
       modeling.moveElements([shapeA], deltaAB);
       modeling.moveElements([shapeB], deltaBA);
 
-      // Recreate all connections with fresh routing
-      connectionsToRecreate.forEach(({ source, target, properties }) => {
+      // Recreate all connections with swapped endpoints and preserved properties
+      toRecreate.forEach((spec) => {
+        const newSource = mapEndpoint(spec.source);
+        const newTarget = mapEndpoint(spec.target);
+        if (!newSource || !newTarget) return;
         try {
-          const newConn = modeling.connect(source, target);
-          if (properties.name) {
-            modeling.updateProperties(newConn, { name: properties.name });
+          const newConn = modeling.connect(newSource, newTarget);
+          if (spec.name) {
+            modeling.updateProperties(newConn, { name: spec.name });
           }
-          if (properties.conditionExpression) {
-            const moddle = modeler.get("moddle") as any;
-            const cond = properties.conditionExpression;
-            newConn.businessObject.conditionExpression = moddle.create(
-              cond.$type,
-              { body: cond.body, language: cond.language }
-            );
+          if (spec.conditionExpression) {
+            try {
+              const moddle = modeler.get("moddle") as any;
+              const cond = spec.conditionExpression;
+              const recreated = moddle?.create?.(cond.$type, {
+                body: cond.body,
+                language: cond.language,
+              }) || cond;
+              newConn.businessObject.conditionExpression = recreated;
+            } catch (e) {
+              // best-effort
+            }
+          }
+          if (spec.wasDefault) {
+            try {
+              modeling.updateProperties(newSource, { default: newConn.businessObject });
+            } catch (e) {
+              // ignore if not supported on this node type
+            }
           }
         } catch (err) {
-          console.warn("Failed to recreate connection:", source.id, "->", target.id, err);
+          console.warn(
+            "Failed to recreate connection:",
+            spec.source?.id,
+            "->",
+            spec.target?.id,
+            err
+          );
         }
       });
 

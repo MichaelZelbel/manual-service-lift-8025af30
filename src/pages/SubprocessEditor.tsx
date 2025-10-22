@@ -157,8 +157,8 @@ export default function SubprocessEditor() {
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="graphical">Graphical Editor</TabsTrigger>
             <TabsTrigger value="list">List Editor</TabsTrigger>
+            <TabsTrigger value="graphical">Graphical Editor</TabsTrigger>
           </TabsList>
 
           <TabsContent value="graphical" className="space-y-4">

@@ -8,18 +8,18 @@ import { toast } from "@/hooks/use-toast";
 
 // Hardcoded users
 const USERS = [{
-  bNumber: "BH2856",
-  password: "EpyTi3zGfRw0",
+  bNumber: "BH1111",
+  password: "Dell@123",
   name: "Alice",
   role: "Admin"
 }, {
-  bNumber: "BH5534",
-  password: "LCAGg4t8tu1b",
+  bNumber: "BH2222",
+  password: "Dell@123",
   name: "Bob",
   role: "User"
 }, {
-  bNumber: "BH7567",
-  password: "7qW0dhF3YNbe",
+  bNumber: "BH3333",
+  password: "Dell@123",
   name: "Mallory",
   role: "User"
 }];

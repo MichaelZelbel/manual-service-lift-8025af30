@@ -168,6 +168,47 @@ Deno.serve(async (req) => {
           // Update BPMN with form definition
           updatedBpmnXml = addFormDefinitionToBpmn(updatedBpmnXml, elementId, formId, elementTag);
           console.log('Generated form for start event');
+        } else if (elementTag.includes('usertask')) {
+          // User task - generate form and link it
+          formIndex++;
+          const templateKey = determineUserTaskTemplate(element, xmlDoc);
+          const slug = sanitizeFilename(elementName);
+          const paddedIndex = String(formIndex).padStart(3, '0');
+          const formFilename = `${paddedIndex}-${slug}.form`;
+          const formId = `${paddedIndex}-${slug}-${timestamp}`;
+
+          const tpl = templates[templateKey];
+          const formJson = await (tpl
+            ? generateFormJson(tpl, {
+                serviceName: service.name,
+                stepName: elementName,
+                stepDescription: getStepDescription(elementId, serviceSteps) || '',
+                nextTasks: getNextTasks(element, xmlDoc),
+                references: getReferences(elementId, mdsData),
+                formId,
+              })
+            : generateFallbackFormJson({
+                kind: 'userTask',
+                serviceName: service.name,
+                stepName: elementName,
+                stepDescription: getStepDescription(elementId, serviceSteps) || '',
+                nextTasks: getNextTasks(element, xmlDoc),
+                references: getReferences(elementId, mdsData),
+                formId,
+              }));
+
+          forms[formFilename] = formJson;
+          manifest.forms.push({
+            nodeId: elementId,
+            name: elementName,
+            filename: formFilename,
+            formId,
+            templateType: templateKey,
+          });
+
+          // Update BPMN with form definition on the user task
+          updatedBpmnXml = addFormDefinitionToBpmn(updatedBpmnXml, elementId, formId, elementTag);
+          console.log('Generated form for user task:', elementName);
         }
       }
 
@@ -183,34 +224,41 @@ Deno.serve(async (req) => {
           // Determine template based on subprocess structure
           const templateKey = 'NEXT_STEP_SINGLE'; // Default to single path for subprocesses
 
-          if (templates[templateKey]) {
-            // Get step description and references
-            const step = serviceSteps?.find(s => s.subprocess_id === subprocess.id);
-            const mdsStep = mdsData?.find(m => m.step_external_id === subprocess.id);
+          // Get step description and references
+          const step = serviceSteps?.find(s => s.subprocess_id === subprocess.id);
+          const mdsStep = mdsData?.find(m => m.step_external_id === subprocess.id);
 
-            const formJson = await generateFormJson(
-              templates[templateKey],
-              {
+          const tpl = templates[templateKey];
+          const formJson = await (tpl
+            ? generateFormJson(tpl, {
                 serviceName: service.name,
                 stepName: subprocess.name,
                 stepDescription: step?.description || '',
                 nextTasks: [],
                 references: mdsStep ? getReferencesFromMds(mdsStep) : '',
                 formId,
-              }
-            );
+              })
+            : generateFallbackFormJson({
+                kind: 'subprocess',
+                serviceName: service.name,
+                stepName: subprocess.name,
+                stepDescription: step?.description || '',
+                nextTasks: [],
+                references: mdsStep ? getReferencesFromMds(mdsStep) : '',
+                formId,
+              }));
 
-            forms[formFilename] = formJson;
-            manifest.forms.push({
-              nodeId: subprocess.id,
-              name: subprocess.name,
-              filename: formFilename,
-              formId,
-              templateType: templateKey,
-            });
-            console.log('Generated form for subprocess:', subprocess.name);
-          }
+          forms[formFilename] = formJson;
+          manifest.forms.push({
+            nodeId: subprocess.id,
+            name: subprocess.name,
+            filename: formFilename,
+            formId,
+            templateType: templateKey,
+          });
+          console.log('Generated form for subprocess:', subprocess.name);
         }
+      }
       }
     }
 

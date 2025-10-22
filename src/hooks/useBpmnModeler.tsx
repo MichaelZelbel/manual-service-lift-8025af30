@@ -43,13 +43,27 @@ export function useBpmnModeler({ entityId, entityType, onAutoSave }: UseBpmnMode
     };
   }, []);
 
+  // Helper to clean HTML-wrapped XML
+  const cleanXml = (xml: string): string => {
+    // Check if XML is wrapped in HTML tags (corrupted data)
+    if (xml.includes('<html>') || xml.includes('<body>')) {
+      // Extract just the BPMN content
+      const match = xml.match(/<bpmn:definitions[\s\S]*<\/bpmn:definitions>/);
+      if (match) {
+        return match[0];
+      }
+    }
+    return xml;
+  };
+
   // Load XML from database
   const loadXml = useCallback(
     async (xml: string) => {
       if (!modeler) return;
       try {
         suppressSaveRef.current = true;
-        await modeler.importXML(xml);
+        const cleanedXml = cleanXml(xml);
+        await modeler.importXML(cleanedXml);
         suppressSaveRef.current = false;
         setError(null);
       } catch (err) {

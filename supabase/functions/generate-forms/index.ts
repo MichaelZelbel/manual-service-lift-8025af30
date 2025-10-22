@@ -542,7 +542,12 @@ function addFormDefinitionToBpmn(
     }
   }
   
-  return xmlDoc.documentElement?.outerHTML || bpmnXml;
+  // Extract only the BPMN content, not the HTML wrapper
+  const bpmnRoot = xmlDoc.querySelector('bpmn\\:definitions, definitions');
+  if (!bpmnRoot) return bpmnXml;
+  
+  // Serialize properly without HTML wrapper
+  return bpmnRoot.outerHTML;
 }
 
 async function createZipPackage(

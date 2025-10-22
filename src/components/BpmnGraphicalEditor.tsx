@@ -33,7 +33,6 @@ export function BpmnGraphicalEditor({ modeler, activeTab }: BpmnGraphicalEditorP
       if (modelerContainer && !container.contains(modelerContainer)) {
         container.appendChild(modelerContainer);
       }
-      canvas.zoom("fit-viewport");
 
       // Attach properties panel (guard against missing module)
       let propertiesPanel: any = null;
@@ -55,41 +54,47 @@ export function BpmnGraphicalEditor({ modeler, activeTab }: BpmnGraphicalEditorP
   // Refresh canvas when switching to graphical tab and relayout connections if needed
   useEffect(() => {
     if (activeTab === "graphical" && modeler) {
-      try {
-        const canvas = modeler.get("canvas") as any;
-        // Force canvas to redraw by clearing cached viewbox and refreshing
-        canvas._cachedViewbox = null;
-        const currentViewbox = canvas.viewbox();
-        canvas.viewbox(currentViewbox);
+      // Use timeout to ensure canvas has proper dimensions
+      setTimeout(() => {
+        try {
+          const canvas = modeler.get("canvas") as any;
+          // Force canvas to redraw by clearing cached viewbox and refreshing
+          canvas._cachedViewbox = null;
+          const currentViewbox = canvas.viewbox();
+          canvas.viewbox(currentViewbox);
 
-        // Check if we need to relayout connections after a swap
-        if ((modeler as any).__needsLayout) {
-          const elementRegistry = modeler.get("elementRegistry") as any;
-          const modeling = modeler.get("modeling") as any;
-          
-          // Get all connections
-          const connections = elementRegistry.filter((el: any) => !!el.waypoints);
-          
-          // Relayout each connection
-          connections.forEach((connection: any) => {
-            try {
-              modeling.layoutConnection(connection);
-            } catch {
+          // Check if we need to relayout connections after a swap
+          if ((modeler as any).__needsLayout) {
+            const elementRegistry = modeler.get("elementRegistry") as any;
+            const modeling = modeler.get("modeling") as any;
+            
+            // Get all connections
+            const connections = elementRegistry.filter((el: any) => !!el.waypoints);
+            
+            // Relayout each connection
+            connections.forEach((connection: any) => {
               try {
-                modeling.updateWaypoints(connection, null);
-              } catch (err) {
-                console.warn("Failed to relayout connection:", connection.id, err);
+                modeling.layoutConnection(connection);
+              } catch {
+                try {
+                  modeling.updateWaypoints(connection, null);
+                } catch (err) {
+                  console.warn("Failed to relayout connection:", connection.id, err);
+                }
               }
-            }
-          });
+            });
 
-          // Clear the flag
-          (modeler as any).__needsLayout = false;
-          console.log("BpmnGraphicalEditor: Relayouted all connections after swap");
+            // Clear the flag
+            (modeler as any).__needsLayout = false;
+            console.log("BpmnGraphicalEditor: Relayouted all connections after swap");
+          }
+
+          // Always fit viewport when switching to graphical tab
+          canvas.zoom("fit-viewport");
+        } catch (error) {
+          console.error("Error refreshing canvas:", error);
         }
-      } catch (error) {
-        console.error("Error refreshing canvas:", error);
-      }
+      }, 50);
     }
   }, [activeTab, modeler]);
 

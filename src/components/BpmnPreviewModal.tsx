@@ -143,31 +143,33 @@ export function BpmnPreviewModal({
           </DialogTitle>
         </DialogHeader>
 
-        {loading && (
-          <div className="flex items-center justify-center h-[600px]">
-            <div className="text-center space-y-2">
-              <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full mx-auto"></div>
-              <p className="text-sm text-muted-foreground">Loading BPMN diagram...</p>
+        <div className="relative">
+          {loading && (
+            <div className="absolute inset-0 flex items-center justify-center bg-background z-10">
+              <div className="text-center space-y-2">
+                <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full mx-auto"></div>
+                <p className="text-sm text-muted-foreground">Loading BPMN diagram...</p>
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {error && (
-          <div className="flex items-center justify-center h-[600px]">
-            <div className="text-center space-y-2">
-              <p className="text-sm text-destructive">{error}</p>
-              <Button variant="outline" onClick={() => onOpenChange(false)}>
-                Close
-              </Button>
+          {error && (
+            <div className="absolute inset-0 flex items-center justify-center bg-background z-10">
+              <div className="text-center space-y-2">
+                <p className="text-sm text-destructive">{error}</p>
+                <Button variant="outline" onClick={() => onOpenChange(false)}>
+                  Close
+                </Button>
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        <div
-          ref={containerRef}
-          className={`border rounded-lg ${loading || error ? 'hidden' : ''}`}
-          style={{ height: '600px' }}
-        />
+          <div
+            ref={containerRef}
+            className="border rounded-lg"
+            style={{ height: '600px' }}
+          />
+        </div>
       </DialogContent>
     </Dialog>
   );

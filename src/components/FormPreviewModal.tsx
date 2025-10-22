@@ -151,75 +151,21 @@ export function FormPreviewModal({
         )}
 
         {!loading && !error && formData && (
-          <ScrollArea className="h-[600px] border rounded-lg p-4">
+          <>
             {showRawJson ? (
-              <pre className="text-xs font-mono whitespace-pre-wrap">
-                {JSON.stringify(formData, null, 2)}
-              </pre>
+              <ScrollArea className="h-[600px] border rounded-lg p-4">
+                <pre className="text-xs font-mono whitespace-pre-wrap">
+                  {JSON.stringify(formData, null, 2)}
+                </pre>
+              </ScrollArea>
             ) : (
-              <div className="space-y-4">
-                <div>
-                  <h3 className="font-semibold text-sm mb-2">Form ID</h3>
-                  <p className="text-sm text-muted-foreground">{formData.id || 'N/A'}</p>
-                </div>
-
-                {formData.title && (
-                  <div>
-                    <h3 className="font-semibold text-sm mb-2">Title</h3>
-                    <p className="text-sm text-muted-foreground">{formData.title}</p>
-                  </div>
-                )}
-
-                {formData.description && (
-                  <div>
-                    <h3 className="font-semibold text-sm mb-2">Description</h3>
-                    <p className="text-sm text-muted-foreground">{formData.description}</p>
-                  </div>
-                )}
-
-                {formData.fields && Array.isArray(formData.fields) && (
-                  <div>
-                    <h3 className="font-semibold text-sm mb-2">Fields ({formData.fields.length})</h3>
-                    <div className="space-y-3">
-                      {formData.fields.map((field: any, idx: number) => (
-                        <div key={idx} className="bg-muted/50 p-3 rounded-lg">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-xs font-medium text-primary">
-                              {field.type || 'unknown'}
-                            </span>
-                            {field.label && (
-                              <span className="text-sm font-medium">{field.label}</span>
-                            )}
-                          </div>
-                          {field.value && (
-                            <p className="text-xs text-muted-foreground mt-1">
-                              Default: {field.value}
-                            </p>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {formData.components && Array.isArray(formData.components) && (
-                  <div>
-                    <h3 className="font-semibold text-sm mb-2">
-                      Components ({formData.components.length})
-                    </h3>
-                    <div className="space-y-2">
-                      {formData.components.map((comp: any, idx: number) => (
-                        <div key={idx} className="bg-muted/50 p-2 rounded text-xs">
-                          <span className="font-medium">{comp.type || 'component'}</span>
-                          {comp.label && <span className="ml-2 text-muted-foreground">- {comp.label}</span>}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
+              <div 
+                ref={containerRef}
+                className="border rounded-lg p-4" 
+                style={{ minHeight: '600px' }}
+              />
             )}
-          </ScrollArea>
+          </>
         )}
       </DialogContent>
     </Dialog>

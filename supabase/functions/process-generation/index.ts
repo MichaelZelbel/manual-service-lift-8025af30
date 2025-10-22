@@ -137,8 +137,18 @@ Deno.serve(async (req) => {
 
   const supabase = createClient(supabaseUrl, supabaseKey);
 
+  let service_external_id: string | undefined;
   try {
-    const { service_external_id } = await req.json();
+    const body = await req.json();
+    service_external_id = body.service_external_id;
+    
+    if (!service_external_id) {
+      return new Response(
+        JSON.stringify({ error: 'service_external_id is required' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    
     console.log('Starting process generation for service:', service_external_id);
 
     // Check if PDF fetch is complete (get most recent)
@@ -198,7 +208,7 @@ Deno.serve(async (req) => {
       .from('documents')
       .select('*')
       .eq('service_external_id', service_external_id)
-      .eq('status', 'completed');
+      .eq('status', 'downloaded');
 
     console.log(`Found ${documents?.length || 0} documents`);
 
@@ -431,9 +441,6 @@ Return only valid BPMN 2.0 XML, no other text.`;
     
     // Mark job as failed
     try {
-      const body = await req.json();
-      const { service_external_id } = body;
-      
       if (service_external_id) {
         await supabase
           .from('jobs')

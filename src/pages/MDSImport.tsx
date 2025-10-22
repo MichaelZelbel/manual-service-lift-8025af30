@@ -66,7 +66,7 @@ const MDSImport = () => {
 
       if (error) throw error;
 
-      // Group by service
+      // Group by service and take the most recent job per type
       const serviceMap = new Map<string, JobStatus>();
       
       for (const job of jobs || []) {
@@ -89,12 +89,13 @@ const MDSImport = () => {
 
         const status = serviceMap.get(job.service_external_id)!;
         
-        if (job.job_type === 'pdf_fetch') {
+        // Only set once per type (since jobs are sorted DESC, first seen is the latest)
+        if (job.job_type === 'pdf_fetch' && (status.pdf_fetch_status === 'N/A' || !status.pdf_fetch_status)) {
           status.pdf_fetch_status = job.status;
-          if (job.total) {
+          if (typeof job.total === 'number' && typeof job.progress === 'number') {
             status.pdf_fetch_progress = `${job.progress}/${job.total}`;
           }
-        } else if (job.job_type === 'process_generation') {
+        } else if (job.job_type === 'process_generation' && (status.process_gen_status === 'N/A' || !status.process_gen_status)) {
           status.process_gen_status = job.status;
         }
       }

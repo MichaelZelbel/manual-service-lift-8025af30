@@ -79,6 +79,10 @@ CRITICAL REQUIREMENTS:
 Output must be a complete, valid BPMN 2.0 XML document that can be imported directly into Camunda 8.`;
 
 async function callClaude(prompt: string, apiKey: string, retryCount = 0): Promise<string> {
+  const REQUEST_TIMEOUT_MS = 60000; // per-request timeout to avoid hanging jobs
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
   try {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -93,11 +97,12 @@ async function callClaude(prompt: string, apiKey: string, retryCount = 0): Promi
         temperature: 0.2,
         system: SYSTEM_PROMPT,
         messages: [{ role: 'user', content: prompt }]
-      })
+      }),
+      signal: controller.signal,
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
+      const errorText = await response.text().catch(() => '');
       console.error('Claude API error:', errorText);
       throw new Error(`Claude API error: ${response.status}`);
     }
@@ -106,11 +111,14 @@ async function callClaude(prompt: string, apiKey: string, retryCount = 0): Promi
     return data.content[0].text;
   } catch (error) {
     if (retryCount < 1) {
-      console.log('Retrying Claude API call...');
+      const reason = (error instanceof Error && error.name === 'AbortError') ? 'timeout' : 'error';
+      console.log(`Retrying Claude API call due to ${reason}...`);
       await new Promise(resolve => setTimeout(resolve, 1000));
       return callClaude(prompt, apiKey, retryCount + 1);
     }
     throw error;
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 

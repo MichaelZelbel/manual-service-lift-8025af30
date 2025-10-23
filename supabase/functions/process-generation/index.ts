@@ -9,29 +9,90 @@ const corsHeaders = {
 const FALLBACK_SUBPROCESS_TEMPLATE = (stepName: string, stepId: string) => `<?xml version="1.0" encoding="UTF-8"?>
 <bpmn:definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
-  xmlns:camunda="http://camunda.org/schema/1.0/bpmn"
+  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+  xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+  xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+  xmlns:zeebe="http://camunda.org/schema/zeebe/1.0"
+  xmlns:modeler="http://camunda.org/schema/modeler/1.0"
   id="Defs_Sub_${stepId}" targetNamespace="http://camunda.org/examples">
   <bpmn:process id="Process_Sub_${stepId}" name="${stepName}" isExecutable="true">
     <bpmn:startEvent id="StartEvent_${stepId}" name="Start"/>
-    <bpmn:userTask id="UserTask_${stepId}" name="Process Activities"/>
+    <bpmn:userTask id="UserTask_${stepId}" name="Process Activities">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="user-task" />
+      </bpmn:extensionElements>
+    </bpmn:userTask>
     <bpmn:endEvent id="EndEvent_${stepId}" name="End"/>
     <bpmn:sequenceFlow id="Flow_1_${stepId}" sourceRef="StartEvent_${stepId}" targetRef="UserTask_${stepId}"/>
     <bpmn:sequenceFlow id="Flow_2_${stepId}" sourceRef="UserTask_${stepId}" targetRef="EndEvent_${stepId}"/>
   </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_${stepId}">
+    <bpmndi:BPMNPlane id="BPMNPlane_${stepId}" bpmnElement="Process_Sub_${stepId}">
+      <bpmndi:BPMNShape id="Shape_Start_${stepId}" bpmnElement="StartEvent_${stepId}">
+        <dc:Bounds x="152" y="102" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Task_${stepId}" bpmnElement="UserTask_${stepId}">
+        <dc:Bounds x="210" y="80" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_End_${stepId}" bpmnElement="EndEvent_${stepId}">
+        <dc:Bounds x="330" y="102" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Edge_Flow1_${stepId}" bpmnElement="Flow_1_${stepId}">
+        <di:waypoint x="188" y="120"/>
+        <di:waypoint x="210" y="120"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow2_${stepId}" bpmnElement="Flow_2_${stepId}">
+        <di:waypoint x="310" y="120"/>
+        <di:waypoint x="330" y="120"/>
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
 </bpmn:definitions>`;
 
 const FALLBACK_MAIN_TEMPLATE = (serviceName: string, serviceId: string) => `<?xml version="1.0" encoding="UTF-8"?>
 <bpmn:definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
-  xmlns:camunda="http://camunda.org/schema/1.0/bpmn"
+  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+  xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+  xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+  xmlns:zeebe="http://camunda.org/schema/zeebe/1.0"
+  xmlns:modeler="http://camunda.org/schema/modeler/1.0"
   id="Defs_Main_${serviceId}" targetNamespace="http://camunda.org/examples">
   <bpmn:process id="Process_Main_${serviceId}" name="${serviceName}" isExecutable="true">
     <bpmn:startEvent id="StartEvent_1" name="Start"/>
-    <bpmn:userTask id="UserTask_1" name="Process Activities" camunda:candidateGroups="Default"/>
+    <bpmn:userTask id="UserTask_1" name="Process Activities">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="user-task" />
+        <zeebe:taskHeaders>
+          <zeebe:header key="candidateGroups" value="Default" />
+        </zeebe:taskHeaders>
+      </bpmn:extensionElements>
+    </bpmn:userTask>
     <bpmn:endEvent id="EndEvent_1" name="End"/>
     <bpmn:sequenceFlow id="Flow_1" sourceRef="StartEvent_1" targetRef="UserTask_1"/>
     <bpmn:sequenceFlow id="Flow_2" sourceRef="UserTask_1" targetRef="EndEvent_1"/>
   </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_${serviceId}">
+    <bpmndi:BPMNPlane id="BPMNPlane_${serviceId}" bpmnElement="Process_Main_${serviceId}">
+      <bpmndi:BPMNShape id="Shape_Start_${serviceId}" bpmnElement="StartEvent_1">
+        <dc:Bounds x="152" y="102" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Task_${serviceId}" bpmnElement="UserTask_1">
+        <dc:Bounds x="210" y="80" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_End_${serviceId}" bpmnElement="EndEvent_1">
+        <dc:Bounds x="330" y="102" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Edge_Flow1_${serviceId}" bpmnElement="Flow_1">
+        <di:waypoint x="188" y="120"/>
+        <di:waypoint x="210" y="120"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow2_${serviceId}" bpmnElement="Flow_2">
+        <di:waypoint x="310" y="120"/>
+        <di:waypoint x="330" y="120"/>
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
 </bpmn:definitions>`;
 
 const SYSTEM_PROMPT = `You are a BPMN 2.0 generator for Camunda 8.
@@ -93,7 +154,7 @@ async function callClaude(prompt: string, apiKey: string, retryCount = 0): Promi
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-5',
-        max_tokens: 6000,
+        max_tokens: 2500,
         temperature: 0.2,
         system: SYSTEM_PROMPT,
         messages: [{ role: 'user', content: prompt }]

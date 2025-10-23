@@ -83,10 +83,17 @@ export function useBpmnModeler({ entityId, entityType, onAutoSave }: UseBpmnMode
         await modeler.importXML(cleanedXml);
         suppressSaveRef.current = false;
         setError(null);
-      } catch (err) {
+      } catch (err: any) {
         console.error("Error importing XML:", err);
-        setError("Failed to load BPMN diagram");
-        toast.error("Failed to load BPMN diagram");
+        try {
+          await modeler.createDiagram();
+          suppressSaveRef.current = false;
+          setError(null);
+          toast.info("Diagram lacked layout (DI). Showing a blank canvas so you can continue.");
+        } catch (e2) {
+          setError("Failed to load BPMN diagram");
+          toast.error("Failed to load BPMN diagram");
+        }
       }
     },
     [modeler]

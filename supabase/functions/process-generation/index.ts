@@ -79,7 +79,7 @@ CRITICAL REQUIREMENTS:
 Output must be a complete, valid BPMN 2.0 XML document that can be imported directly into Camunda 8.`;
 
 async function callClaude(prompt: string, apiKey: string, retryCount = 0): Promise<string> {
-  const REQUEST_TIMEOUT_MS = 15000; // shorter timeout to prevent long hangs when AI is unavailable
+  const REQUEST_TIMEOUT_MS = 45000; // 45 second timeout per request
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
@@ -142,18 +142,34 @@ Deno.serve(async (req) => {
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
   const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
   const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
-  const HAS_AI = !!(ANTHROPIC_API_KEY && ANTHROPIC_API_KEY.trim().length > 0);
+
+  if (!ANTHROPIC_API_KEY) {
+    return new Response(
+      JSON.stringify({ error: 'ANTHROPIC_API_KEY not configured' }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
 
   const supabase = createClient(supabaseUrl, supabaseKey);
 
   let service_external_id: string | undefined;
+  let job_id: string | undefined;
+  
   try {
     const body = await req.json();
     service_external_id = body.service_external_id;
+    job_id = body.job_id;
     
     if (!service_external_id) {
       return new Response(
         JSON.stringify({ error: 'service_external_id is required' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    
+    if (!job_id) {
+      return new Response(
+        JSON.stringify({ error: 'job_id is required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -178,16 +194,23 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Update job status to running
+    // Update job status to running with progress tracking
+    const totalSteps = await supabase
+      .from('mds_data')
+      .select('*', { count: 'exact', head: true })
+      .eq('service_external_id', service_external_id);
+    
+    const total = (totalSteps.count || 0) + 1; // +1 for main process
+    
     await supabase
       .from('jobs')
       .update({ 
         status: 'running',
-        started_at: new Date().toISOString()
+        started_at: new Date().toISOString(),
+        progress: 0,
+        total: total
       })
-      .eq('service_external_id', service_external_id)
-      .eq('job_type', 'process_generation')
-      .eq('status', 'queued');
+      .eq('id', job_id);
 
     // Fetch MDS data
     const { data: mdsData, error: mdsError } = await supabase
@@ -265,6 +288,7 @@ Deno.serve(async (req) => {
 
     console.log('Generating subprocess BPMNs...');
     const subprocesses = [];
+    let completedSubprocesses = 0;
 
     // Generate one subprocess BPMN per step
     for (const step of stepsInfo) {
@@ -308,34 +332,32 @@ CRITICAL: Include complete <bpmndi:BPMNDiagram> section:
 Use proper Camunda 8 namespaces (zeebe, not camunda).
 Return only valid BPMN 2.0 XML, no other text.`;
 
-      if (HAS_AI) {
-        try {
-          const xmlResponse = await callClaude(subprocessPrompt, ANTHROPIC_API_KEY as string);
-          const subprocess_bpmn_xml = extractXML(xmlResponse);
-          
-          subprocesses.push({
-            step_external_id: step.step_external_id,
-            subprocess_name: step.name,
-            subprocess_bpmn_xml
-          });
-          
-          console.log(`✓ Generated subprocess for ${step.name}`);
-        } catch (error) {
-          console.error(`Failed to generate subprocess for ${step.name}, using fallback:`, error);
-          subprocesses.push({
-            step_external_id: step.step_external_id,
-            subprocess_name: step.name,
-            subprocess_bpmn_xml: FALLBACK_SUBPROCESS_TEMPLATE(step.name, step.step_external_id)
-          });
-        }
-      } else {
-        // No AI key configured, use fast fallback
+      try {
+        const xmlResponse = await callClaude(subprocessPrompt, ANTHROPIC_API_KEY);
+        const subprocess_bpmn_xml = extractXML(xmlResponse);
+        
+        subprocesses.push({
+          step_external_id: step.step_external_id,
+          subprocess_name: step.name,
+          subprocess_bpmn_xml
+        });
+        
+        console.log(`✓ Generated subprocess for ${step.name}`);
+      } catch (error) {
+        console.error(`Failed to generate subprocess for ${step.name}, using fallback:`, error);
         subprocesses.push({
           step_external_id: step.step_external_id,
           subprocess_name: step.name,
           subprocess_bpmn_xml: FALLBACK_SUBPROCESS_TEMPLATE(step.name, step.step_external_id)
         });
       }
+      
+      // Update progress
+      completedSubprocesses++;
+      await supabase
+        .from('jobs')
+        .update({ progress: completedSubprocesses })
+        .eq('id', job_id);
     }
 
     console.log('Generating main process BPMN...');
@@ -389,17 +411,12 @@ Use proper Camunda 8 namespaces (zeebe, not camunda).
 Return only valid BPMN 2.0 XML, no other text.`;
 
     let main_bpmn_xml: string;
-    if (HAS_AI) {
-      try {
-        const mainXmlResponse = await callClaude(mainPrompt, ANTHROPIC_API_KEY as string);
-        main_bpmn_xml = extractXML(mainXmlResponse);
-        console.log('✓ Generated main process');
-      } catch (error) {
-        console.error('Failed to generate main process, using fallback:', error);
-        main_bpmn_xml = FALLBACK_MAIN_TEMPLATE(serviceData.name, service_external_id);
-      }
-    } else {
-      // No AI key configured, use fast fallback
+    try {
+      const mainXmlResponse = await callClaude(mainPrompt, ANTHROPIC_API_KEY);
+      main_bpmn_xml = extractXML(mainXmlResponse);
+      console.log('✓ Generated main process');
+    } catch (error) {
+      console.error('Failed to generate main process, using fallback:', error);
       main_bpmn_xml = FALLBACK_MAIN_TEMPLATE(serviceData.name, service_external_id);
     }
 
@@ -456,17 +473,17 @@ Return only valid BPMN 2.0 XML, no other text.`;
       console.log(`✓ Created subprocess and step for: ${row.step_name}`);
     }
 
-    // Mark job as complete
+    console.log('Process generation completed successfully');
+
+    // Mark job as completed
     await supabase
       .from('jobs')
-      .update({
+      .update({ 
         status: 'completed',
-        completed_at: new Date().toISOString(),
+        progress: total,
+        completed_at: new Date().toISOString()
       })
-      .eq('service_external_id', service_external_id)
-      .eq('job_type', 'process_generation');
-
-    console.log('Process generation complete!');
+      .eq('id', job_id);
 
     return new Response(
       JSON.stringify({ 
@@ -479,9 +496,9 @@ Return only valid BPMN 2.0 XML, no other text.`;
   } catch (error) {
     console.error('Process generation error:', error);
     
-    // Mark job as failed
-    try {
-      if (service_external_id) {
+    // Mark job as failed with specific job_id
+    if (job_id) {
+      try {
         await supabase
           .from('jobs')
           .update({
@@ -489,11 +506,10 @@ Return only valid BPMN 2.0 XML, no other text.`;
             error_message: error instanceof Error ? error.message : 'Unknown error',
             completed_at: new Date().toISOString(),
           })
-          .eq('service_external_id', service_external_id)
-          .eq('job_type', 'process_generation');
+          .eq('id', job_id);
+      } catch (e) {
+        console.error('Failed to update job status:', e);
       }
-    } catch (e) {
-      console.error('Failed to update job status:', e);
     }
 
     return new Response(

@@ -185,18 +185,36 @@ Deno.serve(async (req) => {
 
     console.log(`PDF fetch complete: ${successCount} succeeded, ${failCount} failed`);
 
-    // Trigger process-generation edge function
-    try {
-      console.log(`Triggering process-generation for service ${service_external_id}`);
-      supabase.functions.invoke('process-generation', {
-        body: { service_external_id }
-      }).then(() => {
-        console.log(`Process generation triggered for service ${service_external_id}`);
-      }).catch(err => {
-        console.error(`Failed to trigger process-generation for ${service_external_id}:`, err);
-      });
-    } catch (error) {
-      console.error(`Error triggering process-generation for ${service_external_id}:`, error);
+    // Get the queued process_generation job for this service
+    const { data: processGenJob } = await supabase
+      .from('jobs')
+      .select('id')
+      .eq('service_external_id', service_external_id)
+      .eq('job_type', 'process_generation')
+      .eq('status', 'queued')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    // Trigger process-generation edge function with job_id
+    if (processGenJob) {
+      try {
+        console.log(`Triggering process-generation for service ${service_external_id} with job_id ${processGenJob.id}`);
+        supabase.functions.invoke('process-generation', {
+          body: { 
+            service_external_id,
+            job_id: processGenJob.id 
+          }
+        }).then(() => {
+          console.log(`Process generation triggered for service ${service_external_id}`);
+        }).catch(err => {
+          console.error(`Failed to trigger process-generation for ${service_external_id}:`, err);
+        });
+      } catch (error) {
+        console.error(`Error triggering process-generation for ${service_external_id}:`, error);
+      }
+    } else {
+      console.warn(`No queued process_generation job found for service ${service_external_id}`);
     }
 
     return new Response(

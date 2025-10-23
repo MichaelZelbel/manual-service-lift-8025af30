@@ -130,11 +130,11 @@ Deno.serve(async (req) => {
       }).select().single();
 
       // Queue process generation job (will run after PDFs are fetched)
-      await supabase.from('jobs').insert({
+      const { data: processGenJob } = await supabase.from('jobs').insert({
         service_external_id: serviceId,
         job_type: 'process_generation',
         status: 'queued',
-      });
+      }).select().single();
 
       // Trigger pdf-fetch edge function immediately
       if (pdfJob) {

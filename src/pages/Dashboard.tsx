@@ -8,7 +8,15 @@ import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 import { ExportModal } from "@/components/ExportModal";
 import { useUserRole } from "@/hooks/useUserRole";
-import { Settings, Upload, Trash2 } from "lucide-react";
+import { Settings, Upload, Trash2, FileBox } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface User {
   bNumber: string;
@@ -129,29 +137,34 @@ const Dashboard = () => {
           </button>
           <div className="flex items-center gap-4">
             {isAdmin && (
-              <>
-                <Button
-                  variant="outline"
-                  onClick={() => navigate("/admin/mds-import")}
-                >
-                  <Upload className="h-4 w-4 mr-2" />
-                  MDS Import
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => navigate("/admin/manual-services")}
-                >
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Deletion
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => navigate("/admin/templates")}
-                >
-                  <Settings className="h-4 w-4 mr-2" />
-                  Form Templates
-                </Button>
-              </>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline">
+                    <Settings className="h-4 w-4 mr-2" />
+                    Admin
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuLabel>Administration</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => navigate("/admin/mds-import")}>
+                    <Upload className="h-4 w-4 mr-2" />
+                    MDS Import
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => navigate("/admin/manual-services")}>
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Deletion
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => navigate("/admin/templates")}>
+                    <Settings className="h-4 w-4 mr-2" />
+                    Form Templates
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => navigate("/admin/fallback-diagram")}>
+                    <FileBox className="h-4 w-4 mr-2" />
+                    Fallback Diagram
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             )}
             <div className="text-right">
               <p className="text-sm font-medium text-foreground">{user.name}</p>

@@ -8,6 +8,7 @@ import Dashboard from "./pages/Dashboard";
 import ProcessEditor from "./pages/ProcessEditor";
 import SubprocessEditor from "./pages/SubprocessEditor";
 import AdminTemplates from "./pages/AdminTemplates";
+import AdminManualServices from "./pages/AdminManualServices";
 import MDSImport from "./pages/MDSImport";
 import NotFound from "./pages/NotFound";
 
@@ -25,6 +26,7 @@ const App = () => (
           <Route path="/process/:id" element={<ProcessEditor />} />
           <Route path="/subprocess/:id" element={<SubprocessEditor />} />
           <Route path="/admin/templates" element={<AdminTemplates />} />
+          <Route path="/admin/manual-services" element={<AdminManualServices />} />
           <Route path="/admin/mds-import" element={<MDSImport />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />

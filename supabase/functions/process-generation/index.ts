@@ -492,46 +492,35 @@ Return only valid BPMN 2.0 XML, no other text.`;
       })
       .eq('id', service_external_id);
 
-    // Create subprocesses and manual_service_steps
+    // Update placeholder subprocesses with generated XML
     for (let i = 0; i < mdsData.length; i++) {
       const row = mdsData[i];
       const subprocessData = subprocesses.find((sp: any) => sp.step_external_id === row.step_external_id);
 
-      if (!subprocessData) {
-        console.error(`No subprocess found for step ${row.step_external_id}`);
+      const existingId = placeholderMap[row.step_external_id];
+      if (!existingId) {
+        console.error(`No placeholder subprocess ID found for step ${row.step_external_id}`);
         continue;
       }
 
-      // Create subprocess
-      const { data: subprocess, error: subprocessError } = await supabase
+      if (!subprocessData) {
+        console.error(`No generated subprocess XML found for step ${row.step_external_id}`);
+        continue;
+      }
+
+      const { error: updateError } = await supabase
         .from('subprocesses')
-        .insert({
-          service_id: service_external_id,
+        .update({
           name: row.step_name,
           original_bpmn_xml: subprocessData.subprocess_bpmn_xml,
         })
-        .select()
-        .single();
+        .eq('id', existingId);
 
-      if (subprocessError || !subprocess) {
-        console.error('Failed to create subprocess:', subprocessError);
-        continue;
+      if (updateError) {
+        console.error('Failed to update subprocess:', updateError);
+      } else {
+        console.log(`✓ Updated subprocess XML for: ${row.step_name}`);
       }
-
-      // Create manual_service_step
-      await supabase
-        .from('manual_service_steps')
-        .insert({
-          service_id: service_external_id,
-          subprocess_id: subprocess.id,
-          name: row.step_name,
-          description: row.step_name,
-          step_order: i,
-          original_order: i,
-          candidate_group: row.candidate_group,
-        });
-
-      console.log(`✓ Created subprocess and step for: ${row.step_name}`);
     }
 
     console.log('Process generation completed successfully');

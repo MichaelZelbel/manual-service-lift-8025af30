@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 import { ExportModal } from "@/components/ExportModal";
 import { useUserRole } from "@/hooks/useUserRole";
-import { Settings, Upload } from "lucide-react";
+import { Settings, Upload, Trash2 } from "lucide-react";
 
 interface User {
   bNumber: string;
@@ -136,6 +136,13 @@ const Dashboard = () => {
                 >
                   <Upload className="h-4 w-4 mr-2" />
                   MDS Import
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => navigate("/admin/manual-services")}
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Deletion
                 </Button>
                 <Button
                   variant="outline"

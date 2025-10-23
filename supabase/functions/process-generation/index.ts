@@ -79,7 +79,7 @@ CRITICAL REQUIREMENTS:
 Output must be a complete, valid BPMN 2.0 XML document that can be imported directly into Camunda 8.`;
 
 async function callClaude(prompt: string, apiKey: string, retryCount = 0): Promise<string> {
-  const REQUEST_TIMEOUT_MS = 60000; // per-request timeout to avoid hanging jobs
+  const REQUEST_TIMEOUT_MS = 15000; // shorter timeout to prevent long hangs when AI is unavailable
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
@@ -141,7 +141,8 @@ Deno.serve(async (req) => {
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
   const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-  const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY')!;
+  const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
+  const HAS_AI = !!(ANTHROPIC_API_KEY && ANTHROPIC_API_KEY.trim().length > 0);
 
   const supabase = createClient(supabaseUrl, supabaseKey);
 
@@ -185,7 +186,8 @@ Deno.serve(async (req) => {
         started_at: new Date().toISOString()
       })
       .eq('service_external_id', service_external_id)
-      .eq('job_type', 'process_generation');
+      .eq('job_type', 'process_generation')
+      .eq('status', 'queued');
 
     // Fetch MDS data
     const { data: mdsData, error: mdsError } = await supabase
@@ -306,19 +308,28 @@ CRITICAL: Include complete <bpmndi:BPMNDiagram> section:
 Use proper Camunda 8 namespaces (zeebe, not camunda).
 Return only valid BPMN 2.0 XML, no other text.`;
 
-      try {
-        const xmlResponse = await callClaude(subprocessPrompt, ANTHROPIC_API_KEY);
-        const subprocess_bpmn_xml = extractXML(xmlResponse);
-        
-        subprocesses.push({
-          step_external_id: step.step_external_id,
-          subprocess_name: step.name,
-          subprocess_bpmn_xml
-        });
-        
-        console.log(`✓ Generated subprocess for ${step.name}`);
-      } catch (error) {
-        console.error(`Failed to generate subprocess for ${step.name}, using fallback:`, error);
+      if (HAS_AI) {
+        try {
+          const xmlResponse = await callClaude(subprocessPrompt, ANTHROPIC_API_KEY as string);
+          const subprocess_bpmn_xml = extractXML(xmlResponse);
+          
+          subprocesses.push({
+            step_external_id: step.step_external_id,
+            subprocess_name: step.name,
+            subprocess_bpmn_xml
+          });
+          
+          console.log(`✓ Generated subprocess for ${step.name}`);
+        } catch (error) {
+          console.error(`Failed to generate subprocess for ${step.name}, using fallback:`, error);
+          subprocesses.push({
+            step_external_id: step.step_external_id,
+            subprocess_name: step.name,
+            subprocess_bpmn_xml: FALLBACK_SUBPROCESS_TEMPLATE(step.name, step.step_external_id)
+          });
+        }
+      } else {
+        // No AI key configured, use fast fallback
         subprocesses.push({
           step_external_id: step.step_external_id,
           subprocess_name: step.name,
@@ -378,12 +389,17 @@ Use proper Camunda 8 namespaces (zeebe, not camunda).
 Return only valid BPMN 2.0 XML, no other text.`;
 
     let main_bpmn_xml: string;
-    try {
-      const mainXmlResponse = await callClaude(mainPrompt, ANTHROPIC_API_KEY);
-      main_bpmn_xml = extractXML(mainXmlResponse);
-      console.log('✓ Generated main process');
-    } catch (error) {
-      console.error('Failed to generate main process, using fallback:', error);
+    if (HAS_AI) {
+      try {
+        const mainXmlResponse = await callClaude(mainPrompt, ANTHROPIC_API_KEY as string);
+        main_bpmn_xml = extractXML(mainXmlResponse);
+        console.log('✓ Generated main process');
+      } catch (error) {
+        console.error('Failed to generate main process, using fallback:', error);
+        main_bpmn_xml = FALLBACK_MAIN_TEMPLATE(serviceData.name, service_external_id);
+      }
+    } else {
+      // No AI key configured, use fast fallback
       main_bpmn_xml = FALLBACK_MAIN_TEMPLATE(serviceData.name, service_external_id);
     }
 

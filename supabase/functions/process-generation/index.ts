@@ -492,35 +492,46 @@ Return only valid BPMN 2.0 XML, no other text.`;
       })
       .eq('id', service_external_id);
 
-    // Update placeholder subprocesses with generated XML
+    // Create subprocesses and manual_service_steps
     for (let i = 0; i < mdsData.length; i++) {
       const row = mdsData[i];
       const subprocessData = subprocesses.find((sp: any) => sp.step_external_id === row.step_external_id);
 
-      const existingId = placeholderMap[row.step_external_id];
-      if (!existingId) {
-        console.error(`No placeholder subprocess ID found for step ${row.step_external_id}`);
-        continue;
-      }
-
       if (!subprocessData) {
-        console.error(`No generated subprocess XML found for step ${row.step_external_id}`);
+        console.error(`No subprocess found for step ${row.step_external_id}`);
         continue;
       }
 
-      const { error: updateError } = await supabase
+      // Create subprocess
+      const { data: subprocess, error: subprocessError } = await supabase
         .from('subprocesses')
-        .update({
+        .insert({
+          service_id: service_external_id,
           name: row.step_name,
           original_bpmn_xml: subprocessData.subprocess_bpmn_xml,
         })
-        .eq('id', existingId);
+        .select()
+        .single();
 
-      if (updateError) {
-        console.error('Failed to update subprocess:', updateError);
-      } else {
-        console.log(`✓ Updated subprocess XML for: ${row.step_name}`);
+      if (subprocessError || !subprocess) {
+        console.error('Failed to create subprocess:', subprocessError);
+        continue;
       }
+
+      // Create manual_service_step
+      await supabase
+        .from('manual_service_steps')
+        .insert({
+          service_id: service_external_id,
+          subprocess_id: subprocess.id,
+          name: row.step_name,
+          description: row.step_name,
+          step_order: i,
+          original_order: i,
+          candidate_group: row.candidate_group,
+        });
+
+      console.log(`✓ Created subprocess and step for: ${row.step_name}`);
     }
 
     console.log('Process generation completed successfully');

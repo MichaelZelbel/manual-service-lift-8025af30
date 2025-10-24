@@ -28,7 +28,7 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, Upload, Download, Trash2, FileText, CheckCircle2, Eye } from "lucide-react";
+import { ArrowLeft, Upload, Download, Trash2, FileText, CheckCircle2, Eye, Info, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -43,6 +43,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { FormPreviewModal } from "@/components/FormPreviewModal";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 // Template name to filename mapping
 const TEMPLATE_MAP: Record<string, string> = {
@@ -320,6 +321,80 @@ export default function AdminTemplates() {
 
       {/* Main Content */}
       <main className="container mx-auto px-6 py-8">
+        {/* Placeholders Info Card */}
+        <Collapsible defaultOpen={false} className="mb-6">
+          <Card className="border-primary/20 bg-primary/5">
+            <CardHeader className="pb-3">
+              <CollapsibleTrigger className="flex items-center justify-between w-full hover:opacity-80 transition-opacity">
+                <div className="flex items-center gap-2">
+                  <Info className="h-5 w-5 text-primary" />
+                  <CardTitle className="text-lg">Available Placeholders</CardTitle>
+                </div>
+                <ChevronDown className="h-5 w-5 text-muted-foreground transition-transform duration-200 [&[data-state=open]]:rotate-180" />
+              </CollapsibleTrigger>
+            </CardHeader>
+            <CollapsibleContent>
+              <CardContent className="pt-0">
+                <p className="text-sm text-muted-foreground mb-4">
+                  Use these placeholders in your form templates. They will be automatically replaced with actual data when the form is generated.
+                </p>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="font-semibold">Placeholder</TableHead>
+                        <TableHead className="font-semibold">Replacement</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      <TableRow>
+                        <TableCell className="font-mono text-sm bg-muted/50">
+                          ManualServiceNamePlaceholder
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          The manual service's name (from the MDS import)
+                        </TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell className="font-mono text-sm bg-muted/50">
+                          ProcessStepPlaceholder
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          The process step's name (from the MDS import)
+                        </TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell className="font-mono text-sm bg-muted/50">
+                          ProcessDescriptionPlaceholder
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          A brief summary derived from the SOP text of the subprocess
+                        </TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell className="font-mono text-sm bg-muted/50">
+                          NextTaskPlaceholder
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          A chooser element for the user to select from the next possible user tasks. The placeholder will simply be removed if the next user task(s) are fixed.
+                        </TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell className="font-mono text-sm bg-muted/50">
+                          ReferencesPlaceholder
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          PDF Filenames and links, e.g. SOPs, Decision Sheets, and Navigation Sheets (from the MDS import)
+                        </TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </CollapsibleContent>
+          </Card>
+        </Collapsible>
+
         <Card>
           <CardHeader>
             <CardTitle>Form Templates</CardTitle>

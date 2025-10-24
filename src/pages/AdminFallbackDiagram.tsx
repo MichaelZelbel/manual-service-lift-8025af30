@@ -10,7 +10,7 @@ import { useBpmnModeler } from "@/hooks/useBpmnModeler";
 import { BpmnGraphicalEditor } from "@/components/BpmnGraphicalEditor";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-const FALLBACK_DIAGRAM_ID = "fallback-diagram";
+const FALLBACK_DIAGRAM_ID = "00000000-0000-0000-0000-000000000001";
 
 const AdminFallbackDiagram = () => {
   const navigate = useNavigate();

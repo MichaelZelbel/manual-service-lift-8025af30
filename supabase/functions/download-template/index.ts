@@ -11,6 +11,8 @@ const TEMPLATE_MAP: Record<string, string> = {
   'FIRST_STEP_MULTI': 'first-step-multi-path.form',
   'NEXT_STEP_SINGLE': 'next-step-single-path.form',
   'NEXT_STEP_MULTI': 'next-step-multi-path.form',
+  'START_NODE': 'start-node.form',
+  'TASK_NODE': 'task-node.form',
 };
 
 Deno.serve(async (req) => {

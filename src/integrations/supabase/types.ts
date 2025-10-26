@@ -386,6 +386,7 @@ export type Database = {
           name: string
           original_bpmn_xml: string | null
           service_id: string
+          step_external_id: string | null
           updated_at: string
         }
         Insert: {
@@ -395,6 +396,7 @@ export type Database = {
           name: string
           original_bpmn_xml?: string | null
           service_id: string
+          step_external_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -404,6 +406,7 @@ export type Database = {
           name?: string
           original_bpmn_xml?: string | null
           service_id?: string
+          step_external_id?: string | null
           updated_at?: string
         }
         Relationships: [

@@ -623,6 +623,7 @@ Return only valid BPMN 2.0 XML, no other text.`;
         .insert({
           service_id: service_external_id,
           name: step.name,
+          step_external_id: step.step_external_id,
           original_bpmn_xml: subprocessData.subprocess_bpmn_xml,
         })
         .select()

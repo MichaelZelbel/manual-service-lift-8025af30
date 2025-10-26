@@ -34,7 +34,12 @@ export async function generateAndUploadBundle({
     const bpmnXml = subprocess.edited_bpmn_xml || subprocess.original_bpmn_xml;
     if (bpmnXml) {
       const filename = sanitizeFilename(subprocess.name);
-      subprocessBpmns.push({ filename: `subprocess-${filename}.bpmn`, xml: bpmnXml });
+      subprocessBpmns.push({
+        filename: `subprocess-${filename}.bpmn`,
+        xml: bpmnXml,
+        stepExternalId: subprocess.step_external_id,
+        name: subprocess.name
+      });
     }
   }
 
@@ -45,10 +50,11 @@ export async function generateAndUploadBundle({
     generatedAt: new Date().toISOString(),
     bpmn: {
       main: { filename: 'manual-service.bpmn' },
-      subprocesses: subprocessBpmns.map((sp, idx) => ({
-        stepExternalId: `STEP-${String(idx + 1).padStart(2, '0')}`,
+      subprocesses: subprocessBpmns.map((sp) => ({
+        stepExternalId: sp.stepExternalId || 'unknown',
         filename: `subprocesses/${sp.filename}`,
-        taskName: sp.filename.replace('subprocess-', '').replace('.bpmn', ''),
+        taskName: sp.name,
+        calledElement: sp.stepExternalId ? `Process_Sub_${sp.stepExternalId}` : undefined,
       })),
     },
     forms: manifest.forms,

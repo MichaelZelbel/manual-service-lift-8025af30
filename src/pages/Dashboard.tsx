@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,6 +9,9 @@ import { formatDistanceToNow } from "date-fns";
 import { ExportModal } from "@/components/ExportModal";
 import { useUserRole } from "@/hooks/useUserRole";
 import { Settings, Upload, Trash2, FileBox } from "lucide-react";
+import BpmnModeler from "bpmn-js/lib/Modeler";
+// @ts-ignore
+import zeebeModdle from "zeebe-bpmn-moddle/resources/zeebe.json";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -44,8 +47,11 @@ const Dashboard = () => {
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [exportModalType, setExportModalType] = useState<"export" | "analysis">("export");
   const [selectedService, setSelectedService] = useState<ManualService | null>(null);
+  const [bpmnModeler, setBpmnModeler] = useState<any>(null);
+  const [modelerLoading, setModelerLoading] = useState(false);
   const { isAdmin } = useUserRole();
   const navigate = useNavigate();
+  const hiddenModelerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     // Check if user is logged in
@@ -103,10 +109,58 @@ const Dashboard = () => {
     navigate(`/process/${id}`);
   };
 
-  const handleExport = (service: ManualService) => {
+  const handleExport = async (service: ManualService) => {
     setSelectedService(service);
     setExportModalType("export");
-    setExportModalOpen(true);
+    setModelerLoading(true);
+
+    try {
+      // Initialize hidden BPMN modeler if not already created
+      if (!bpmnModeler && hiddenModelerRef.current) {
+        const modeler = new BpmnModeler({
+          container: hiddenModelerRef.current,
+          moddleExtensions: {
+            zeebe: zeebeModdle,
+          },
+        });
+        setBpmnModeler(modeler);
+
+        // Load service BPMN XML
+        const { data, error } = await supabase
+          .from("manual_services")
+          .select("original_bpmn_xml, edited_bpmn_xml")
+          .eq("id", service.id)
+          .single();
+
+        if (error) throw error;
+
+        const xml = data.edited_bpmn_xml || data.original_bpmn_xml;
+        if (!xml) throw new Error("No BPMN XML found for this service");
+
+        await modeler.importXML(xml);
+        setExportModalOpen(true);
+      } else if (bpmnModeler) {
+        // Reuse existing modeler, just load new XML
+        const { data, error } = await supabase
+          .from("manual_services")
+          .select("original_bpmn_xml, edited_bpmn_xml")
+          .eq("id", service.id)
+          .single();
+
+        if (error) throw error;
+
+        const xml = data.edited_bpmn_xml || data.original_bpmn_xml;
+        if (!xml) throw new Error("No BPMN XML found for this service");
+
+        await bpmnModeler.importXML(xml);
+        setExportModalOpen(true);
+      }
+    } catch (error) {
+      console.error("Error loading BPMN:", error);
+      toast.error("Failed to load BPMN model");
+    } finally {
+      setModelerLoading(false);
+    }
   };
 
   const handleAnalysis = (service: ManualService) => {
@@ -253,8 +307,9 @@ const Dashboard = () => {
                       variant="outline"
                       className="w-full"
                       size="sm"
+                      disabled={modelerLoading}
                     >
-                      Download for Camunda
+                      {modelerLoading ? "Loading..." : "Download for Camunda"}
                     </Button>
                     <Button
                       onClick={() => handleAnalysis(service)}
@@ -272,6 +327,9 @@ const Dashboard = () => {
         )}
       </main>
 
+      {/* Hidden BPMN Modeler Container */}
+      <div ref={hiddenModelerRef} style={{ display: "none" }} />
+
       {/* Export Modal */}
       {selectedService && (
         <ExportModal
@@ -286,6 +344,7 @@ const Dashboard = () => {
           type={exportModalType}
           serviceId={selectedService.id}
           serviceName={selectedService.name}
+          bpmnModeler={bpmnModeler}
         />
       )}
     </div>

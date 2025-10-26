@@ -1,5 +1,4 @@
 // /src/actions/generateForCamunda.js
-import { generateBundle } from '../../lib/formgen-core.js';
 import JSZip from 'jszip';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -14,6 +13,8 @@ export async function generateAndUploadBundle({
   templates,
 }) {
   // 1. Generate enriched main BPMN + forms using formgen-core
+  // Dynamic import to avoid parsing issues
+  const { generateBundle } = await import('/lib/formgen-core.js');
   const { updatedBpmnXml, forms, manifest } = await generateBundle({
     serviceName,
     bpmnModeler,

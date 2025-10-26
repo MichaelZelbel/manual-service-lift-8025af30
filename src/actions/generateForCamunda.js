@@ -38,19 +38,22 @@ export async function generateAndUploadBundle({
     templates,
     resolveDescriptions: async (node) => {
       try {
+        const stepName = node?.businessObject?.name || node?.id || "";
+        const refs = referencesMap[stepName] || [];
+        
         const fromDbByName = await fetchStepDescription(String(serviceName), String(node?.id || ""));
-        if (fromDbByName && fromDbByName.trim()) return { stepDescription: fromDbByName.trim(), references: referencesMap[node.id] || [] };
+        if (fromDbByName && fromDbByName.trim()) return { stepDescription: fromDbByName.trim(), references: refs };
         const fromDbById = await fetchStepDescription(String(serviceId), String(node?.id || ""));
-        if (fromDbById && fromDbById.trim()) return { stepDescription: fromDbById.trim(), references: referencesMap[node.id] || [] };
+        if (fromDbById && fromDbById.trim()) return { stepDescription: fromDbById.trim(), references: refs };
         const docs = node?.businessObject?.documentation;
         if (Array.isArray(docs) && docs.length) {
           const text = docs
             .map((d) => (typeof d?.text === "string" ? d.text : (d?.body || "")))
             .join("\n")
             .trim();
-          return { stepDescription: text, references: referencesMap[node.id] || [] };
+          return { stepDescription: text, references: refs };
         }
-        return { stepDescription: "", references: referencesMap[node.id] || [] };
+        return { stepDescription: "", references: refs };
       } catch {
         return { stepDescription: "", references: [] };
       }

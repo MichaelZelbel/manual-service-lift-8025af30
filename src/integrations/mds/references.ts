@@ -1,11 +1,11 @@
 import { supabase } from "@/integrations/supabase/client";
 
 export type StepRef = { name: string; url: string };
-export type RefMap = Record<string, StepRef[]>; // nodeId -> refs[]
+export type RefMap = Record<string, StepRef[]>; // stepName -> refs[]
 
 /**
  * Fetch all references (SOPs, Decision Sheets) for a service from MDS data.
- * Returns a map of nodeId -> array of { name, url }
+ * Returns a map of stepName -> array of { name, url }
  */
 export async function fetchReferencesForService(serviceKey: string): Promise<RefMap> {
   // Query mds_data table for this service and extract URLs
@@ -22,7 +22,7 @@ export async function fetchReferencesForService(serviceKey: string): Promise<Ref
   const map: RefMap = {};
   
   for (const row of data) {
-    if (!row?.step_external_id) continue;
+    if (!row?.step_name) continue;
     
     const refs: StepRef[] = [];
     
@@ -49,7 +49,8 @@ export async function fetchReferencesForService(serviceKey: string): Promise<Ref
     }
     
     if (refs.length > 0) {
-      map[row.step_external_id] = refs;
+      // Key by step_name for easier matching with BPMN node names
+      map[row.step_name] = refs;
     }
   }
   

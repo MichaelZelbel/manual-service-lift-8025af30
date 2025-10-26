@@ -637,7 +637,7 @@ Return only valid BPMN 2.0 XML, no other text.`;
       const rows: Array<{ service_key: string; node_id: string | null; step_description: string | null; service_description: string | null; updated_at: string; }> = [];
       if (serviceDescription) {
         rows.push({
-          service_key: serviceData.name,
+          service_key: service_external_id,
           node_id: null,
           step_description: null,
           service_description: serviceDescription,
@@ -649,7 +649,7 @@ Return only valid BPMN 2.0 XML, no other text.`;
         const desc = (stepDescByName.get(ca.name) || '').trim();
         if (desc) {
           rows.push({
-            service_key: serviceData.name,
+            service_key: service_external_id,
             node_id: ca.id,
             step_description: desc,
             service_description: null,

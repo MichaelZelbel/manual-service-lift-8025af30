@@ -68,22 +68,14 @@ export async function generateAndUploadBundle({
         
         // For StartEvents, fetch service-level description
         if (isStartEvent) {
-          const serviceDesc = await fetchServiceDescription(String(serviceName));
+          const serviceDesc = await fetchServiceDescription(String(serviceId));
           if (serviceDesc && serviceDesc.trim()) {
             console.log(`[resolveDescriptions] Found service description for start event: ${serviceDesc}`);
             return { stepDescription: serviceDesc.trim(), references: refs };
           }
-          // Fallback: try by serviceId
-          const serviceDescById = await fetchServiceDescription(String(serviceId));
-          if (serviceDescById && serviceDescById.trim()) {
-            console.log(`[resolveDescriptions] Found service description by ID for start event: ${serviceDescById}`);
-            return { stepDescription: serviceDescById.trim(), references: refs };
-          }
         }
         
         // For other nodes, fetch step-specific description
-        const fromDbByName = await fetchStepDescription(String(serviceName), String(nodeId));
-        if (fromDbByName && fromDbByName.trim()) return { stepDescription: fromDbByName.trim(), references: refs };
         const fromDbById = await fetchStepDescription(String(serviceId), String(nodeId));
         if (fromDbById && fromDbById.trim()) return { stepDescription: fromDbById.trim(), references: refs };
         const docs = node?.businessObject?.documentation;

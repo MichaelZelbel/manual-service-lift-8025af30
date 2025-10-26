@@ -47,19 +47,11 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 
 // Template name to filename mapping
 const TEMPLATE_MAP: Record<string, string> = {
-  FIRST_STEP_SINGLE: 'first-step-single-path.form',
-  FIRST_STEP_MULTI: 'first-step-multi-path.form',
-  NEXT_STEP_SINGLE: 'next-step-single-path.form',
-  NEXT_STEP_MULTI: 'next-step-multi-path.form',
   START_NODE: 'start-node.form',
   TASK_NODE: 'task-node.form',
 };
 
 const DISPLAY_NAMES: Record<string, string> = {
-  FIRST_STEP_SINGLE: 'First Step, Single Path',
-  FIRST_STEP_MULTI: 'First Step, Multi Path',
-  NEXT_STEP_SINGLE: 'Next Step, Single Path',
-  NEXT_STEP_MULTI: 'Next Step, Multi Path',
   START_NODE: 'Start Node Template',
   TASK_NODE: 'Task Node Template',
 };

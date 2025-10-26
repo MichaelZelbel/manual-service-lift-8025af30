@@ -2,16 +2,23 @@
 import { supabase } from "@/integrations/supabase/client";
 
 export async function loadFormTemplates() {
-  const [startRes, taskRes] = await Promise.all([
-    supabase.storage.from("form_templates").download("start-node.form"),
-    supabase.storage.from("form_templates").download("task-node.form"),
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+
+  const fetchSigned = async (templateName) => {
+    const url = `${supabaseUrl}/functions/v1/download-template?template_name=${encodeURIComponent(templateName)}&t=${Date.now()}`;
+    const res = await fetch(url, { method: 'GET', cache: 'no-store' });
+    if (!res.ok) throw new Error(`Failed to get signed URL for ${templateName}`);
+    const json = await res.json();
+    if (!json?.signed_url) throw new Error(`No signed URL returned for ${templateName}`);
+    const fileRes = await fetch(json.signed_url, { cache: 'no-store' });
+    if (!fileRes.ok) throw new Error(`Failed to download ${templateName}`);
+    return JSON.parse(await fileRes.text());
+  };
+
+  const [firstStep, nextStep] = await Promise.all([
+    fetchSigned('START_NODE'),
+    fetchSigned('TASK_NODE'),
   ]);
-
-  if (startRes.error) throw new Error(`Failed to load start-node.form: ${startRes.error.message}`);
-  if (taskRes.error) throw new Error(`Failed to load task-node.form: ${taskRes.error.message}`);
-
-  const firstStep = JSON.parse(await startRes.data.text());
-  const nextStep = JSON.parse(await taskRes.data.text());
 
   return { firstStep, nextStep };
 }

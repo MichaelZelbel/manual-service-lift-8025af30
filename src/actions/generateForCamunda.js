@@ -1,7 +1,7 @@
 // /src/actions/generateForCamunda.js
 import { supabase } from '@/integrations/supabase/client';
-import { loadFormTemplates } from '@/src/utils/loadFormTemplates.js';
-import { getExportModeler } from '@/src/utils/getExportModeler.js';
+import { loadFormTemplates } from '@/utils/loadFormTemplates.js';
+import { getExportModeler } from '@/utils/getExportModeler.js';
 import { generateBundle } from '@/lib/formgen-core.js';
 
 /**

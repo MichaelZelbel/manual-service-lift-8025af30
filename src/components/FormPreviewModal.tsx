@@ -11,6 +11,7 @@ import { Copy, Code } from "lucide-react";
 import { toast } from "sonner";
 import { Form } from '@bpmn-io/form-js';
 import '@bpmn-io/form-js/dist/assets/form-js.css';
+import '@/styles/formjs-overrides.css';
 
 interface FormPreviewModalProps {
   open: boolean;

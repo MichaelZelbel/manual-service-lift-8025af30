@@ -1,0 +1,17 @@
+/* Form JS overrides to make headings prominent like Camunda */
+.fjs-container .fjs-text strong,
+.fjs-form .fjs-text strong,
+.fjs-container strong,
+.fjs-form strong {
+  font-size: 1.5rem !important; /* ~24px */
+  font-weight: 700 !important;
+  display: block !important;
+  margin: 0 0 0.5rem 0 !important;
+  line-height: 1.2 !important;
+}
+
+/* Ensure base font sizing is not too small inside previews */
+.fjs-container,
+.fjs-form {
+  font-size: 16px !important;
+}

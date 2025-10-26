@@ -107,21 +107,6 @@ export function ExportModal({
           throw new Error("BPMN Modeler instance not available");
         }
 
-        // Diagnostics: surface what the modeler currently contains
-        try {
-          const elementRegistry = bpmnModeler.get("elementRegistry");
-          const all = elementRegistry?.getAll?.() || [];
-          const typeOf = (el: any) => el?.businessObject?.$type || el?.type || "?";
-          const types = all.map(typeOf);
-          const starts = types.filter((t: string) => t === "bpmn:StartEvent").length;
-          const userTasks = types.filter((t: string) => t === "bpmn:UserTask").length;
-          const callActivities = types.filter((t: string) => t === "bpmn:CallActivity").length;
-          const gateways = types.filter((t: string) => /Gateway$/.test(t)).length;
-          toast.info(`Export diagnostics: ${starts} StartEvent, ${userTasks} UserTask, ${callActivities} CallActivity, ${gateways} Gateways`);
-        } catch (e) {
-          console.warn("Export diagnostics failed", e);
-        }
-
         // Load form templates and generate bundle
         const { generateAndUploadBundle } = await import("../actions/generateForCamunda.js");
         const { loadFormTemplates } = await import("../utils/loadFormTemplates.js");

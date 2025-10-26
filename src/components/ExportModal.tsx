@@ -115,9 +115,9 @@ export function ExportModal({
           const types = all.map(typeOf);
           const starts = types.filter((t: string) => t === "bpmn:StartEvent").length;
           const userTasks = types.filter((t: string) => t === "bpmn:UserTask").length;
-          const genericTasks = types.filter((t: string) => /\bTask$/.test(t) && t !== "bpmn:UserTask").length;
+          const callActivities = types.filter((t: string) => t === "bpmn:CallActivity").length;
           const gateways = types.filter((t: string) => /Gateway$/.test(t)).length;
-          toast.info(`Export diagnostics: ${starts} StartEvent, ${userTasks} UserTask, ${genericTasks} other Tasks, ${gateways} Gateways`);
+          toast.info(`Export diagnostics: ${starts} StartEvent, ${userTasks} UserTask, ${callActivities} CallActivity, ${gateways} Gateways`);
         } catch (e) {
           console.warn("Export diagnostics failed", e);
         }

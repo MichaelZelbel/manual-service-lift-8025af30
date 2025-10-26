@@ -1,14 +1,12 @@
----
+
 
 # **Manual Service Lift** {#manual-service-lift}
 
 ### ***Turning manual services into clean Camunda workflows — with a little AI magic.***
 
-**Author:** Michael Zelbel  
  **Version:** Prototype v0.1  
  **Date:** October 2025
 
----
 
 ## 
 

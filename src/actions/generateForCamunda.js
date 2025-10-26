@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { loadFormTemplates } from '@/utils/loadFormTemplates.js';
 import { getExportModeler } from '@/utils/getExportModeler.js';
 import { generateBundle } from '../../lib/formgen-core.js';
-import { fetchStepDescription } from '@/integrations/supabase/descriptions';
+import { fetchStepDescription, fetchServiceDescription } from '@/integrations/supabase/descriptions';
 import { fetchReferencesForService } from '@/integrations/mds/references';
 
 /**
@@ -40,6 +40,7 @@ export async function generateAndUploadBundle({
       try {
         const nodeId = node?.id || "";
         const nodeName = node?.businessObject?.name || "";
+        const isStartEvent = node?.type === 'bpmn:StartEvent' || node?.businessObject?.$type === 'bpmn:StartEvent';
         
         // Extract step_external_id from zeebe:calledElement if it's a CallActivity
         let stepExternalId = null;
@@ -60,11 +61,27 @@ export async function generateAndUploadBundle({
         // Look up references by step_external_id
         let refs = stepExternalId ? (referencesMap[stepExternalId] || []) : [];
         
-        console.log(`[resolveDescriptions] Node ID: ${nodeId}, Name: ${nodeName}, StepExtID: ${stepExternalId}, Found ${refs.length} references`);
+        console.log(`[resolveDescriptions] Node ID: ${nodeId}, Name: ${nodeName}, IsStart: ${isStartEvent}, StepExtID: ${stepExternalId}, Found ${refs.length} references`);
         if (refs.length === 0 && stepExternalId) {
           console.log(`[resolveDescriptions] No refs found for stepExternalId ${stepExternalId}. Available keys:`, Object.keys(referencesMap));
         }
         
+        // For StartEvents, fetch service-level description
+        if (isStartEvent) {
+          const serviceDesc = await fetchServiceDescription(String(serviceName));
+          if (serviceDesc && serviceDesc.trim()) {
+            console.log(`[resolveDescriptions] Found service description for start event: ${serviceDesc}`);
+            return { stepDescription: serviceDesc.trim(), references: refs };
+          }
+          // Fallback: try by serviceId
+          const serviceDescById = await fetchServiceDescription(String(serviceId));
+          if (serviceDescById && serviceDescById.trim()) {
+            console.log(`[resolveDescriptions] Found service description by ID for start event: ${serviceDescById}`);
+            return { stepDescription: serviceDescById.trim(), references: refs };
+          }
+        }
+        
+        // For other nodes, fetch step-specific description
         const fromDbByName = await fetchStepDescription(String(serviceName), String(nodeId));
         if (fromDbByName && fromDbByName.trim()) return { stepDescription: fromDbByName.trim(), references: refs };
         const fromDbById = await fetchStepDescription(String(serviceId), String(nodeId));
@@ -77,7 +94,7 @@ export async function generateAndUploadBundle({
             .trim();
           return { stepDescription: text, references: refs };
         }
-        return { stepDescription: "", references: refs };
+        return { stepDescription: "", references: [] };
       } catch (err) {
         console.error('[resolveDescriptions] Error:', err);
         return { stepDescription: "", references: [] };

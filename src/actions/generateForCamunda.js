@@ -41,12 +41,28 @@ export async function generateAndUploadBundle({
         const nodeId = node?.id || "";
         const nodeName = node?.businessObject?.name || "";
         
-        // Try matching by node ID first (should match step_external_id)
-        let refs = referencesMap[nodeId] || [];
+        // Extract step_external_id from zeebe:calledElement if it's a CallActivity
+        let stepExternalId = null;
+        if (node?.type === 'bpmn:CallActivity' || node?.businessObject?.$type === 'bpmn:CallActivity') {
+          const extensionElements = node?.businessObject?.extensionElements;
+          if (extensionElements?.values) {
+            const calledElement = extensionElements.values.find((el) => 
+              el.$type === 'zeebe:CalledElement'
+            );
+            if (calledElement?.processId) {
+              // Extract from "Process_Sub_3365" -> "3365"
+              const match = calledElement.processId.match(/Process_Sub_(.+)/);
+              if (match) stepExternalId = match[1];
+            }
+          }
+        }
         
-        console.log(`[resolveDescriptions] Node ID: ${nodeId}, Name: ${nodeName}, Found ${refs.length} references`);
-        if (refs.length === 0) {
-          console.log(`[resolveDescriptions] Available keys in referencesMap:`, Object.keys(referencesMap));
+        // Look up references by step_external_id
+        let refs = stepExternalId ? (referencesMap[stepExternalId] || []) : [];
+        
+        console.log(`[resolveDescriptions] Node ID: ${nodeId}, Name: ${nodeName}, StepExtID: ${stepExternalId}, Found ${refs.length} references`);
+        if (refs.length === 0 && stepExternalId) {
+          console.log(`[resolveDescriptions] No refs found for stepExternalId ${stepExternalId}. Available keys:`, Object.keys(referencesMap));
         }
         
         const fromDbByName = await fetchStepDescription(String(serviceName), String(nodeId));
@@ -62,7 +78,8 @@ export async function generateAndUploadBundle({
           return { stepDescription: text, references: refs };
         }
         return { stepDescription: "", references: refs };
-      } catch {
+      } catch (err) {
+        console.error('[resolveDescriptions] Error:', err);
         return { stepDescription: "", references: [] };
       }
     },

@@ -31,7 +31,7 @@ export async function fetchReferencesForService(serviceKey: string): Promise<Ref
       const sopUrls = row.sop_urls.split(',').map(u => u.trim()).filter(Boolean);
       sopUrls.forEach((url, idx) => {
         refs.push({
-          name: `${row.step_name} - SOP${sopUrls.length > 1 ? ` ${idx + 1}` : ''}`,
+          name: sopUrls.length > 1 ? `${row.step_name} (${idx + 1})` : row.step_name,
           url
         });
       });
@@ -42,7 +42,7 @@ export async function fetchReferencesForService(serviceKey: string): Promise<Ref
       const dsUrls = row.decision_sheet_urls.split(',').map(u => u.trim()).filter(Boolean);
       dsUrls.forEach((url, idx) => {
         refs.push({
-          name: `${row.step_name} - Decision Sheet${dsUrls.length > 1 ? ` ${idx + 1}` : ''}`,
+          name: dsUrls.length > 1 ? `${row.step_name} (${idx + 1})` : row.step_name,
           url
         });
       });

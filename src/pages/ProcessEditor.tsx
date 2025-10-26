@@ -215,7 +215,8 @@ export default function ProcessEditor() {
           onOpenChange={setExportModalOpen}
           type="export"
           serviceId={id!}
-          serviceName={`Service ${id}`}
+          serviceName={processName || `Service ${id}`}
+          bpmnModeler={bpmn.modeler}
         />
       </div>
     </div>

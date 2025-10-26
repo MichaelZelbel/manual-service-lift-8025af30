@@ -7,10 +7,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import { CheckCircle2, Download } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { ExportResultsPanel } from "./ExportResultsPanel";
 
@@ -20,6 +18,7 @@ interface ExportModalProps {
   type: "export" | "analysis";
   serviceId: string;
   serviceName: string;
+  bpmnModeler?: any; // bpmn-js Modeler instance (required for export)
 }
 
 const PROGRESS_STEPS = {
@@ -44,9 +43,8 @@ export function ExportModal({
   type,
   serviceId,
   serviceName,
+  bpmnModeler,
 }: ExportModalProps) {
-  const [generateBpmn, setGenerateBpmn] = useState(true);
-  const [generateForms, setGenerateForms] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
   const [currentStep, setCurrentStep] = useState("");
@@ -96,43 +94,34 @@ export function ExportModal({
     setProgress(0);
 
     try {
-      // Create export record
-      const exportType = type === "export" ? "bpmn" : "analysis";
-      const { data: exportRecord, error: exportError } = await supabase
-        .from("exports")
-        .insert({
-          service_id: serviceId,
-          type: exportType,
-          status: "processing",
-        })
-        .select()
-        .single();
-
-      if (exportError) throw exportError;
-
       // Simulate progress
       const steps = type === "export" ? PROGRESS_STEPS.export : PROGRESS_STEPS.analysis;
       const progressPromise = simulateProgress(steps);
 
+      let exportFolder: string | null = null;
       let downloadUrl: string | null = null;
 
       if (type === "export") {
-        // Call generate-forms edge function
-        const { data: generateData, error: generateError } = await supabase.functions.invoke(
-          'generate-forms',
-          {
-            body: {
-              serviceId,
-              generateBpmn,
-              generateForms,
-            },
-          }
-        );
+        // Check if modeler is available
+        if (!bpmnModeler) {
+          throw new Error("BPMN Modeler instance not available");
+        }
 
-        if (generateError) throw generateError;
-        if (!generateData?.ok) throw new Error(generateData?.error || 'Form generation failed');
+        // Load form templates and generate bundle
+        const { generateAndUploadBundle } = await import("../actions/generateForCamunda.js");
+        const { loadFormTemplates } = await import("../utils/loadFormTemplates.js");
+        
+        const templates = await loadFormTemplates();
+        const result = await generateAndUploadBundle({
+          serviceId,
+          serviceName,
+          bpmnModeler,
+          templates,
+        });
 
-        downloadUrl = generateData.downloadUrl;
+        exportFolder = result.exportFolder;
+        
+        toast.success(`Generated ${result.formsCount} forms and ${result.subprocessCount} subprocess BPMNs`);
       } else {
         // Analysis - keep mock for now
         const filename = `${serviceName.replace(/\s+/g, "_")}_Analysis_Report.pdf`;
@@ -142,21 +131,13 @@ export function ExportModal({
       // Wait for progress animation to complete
       await progressPromise;
 
-      // Update export record
-      await supabase
-        .from("exports")
-        .update({
-          status: "completed",
-          completed_at: new Date().toISOString(),
-          download_url: downloadUrl,
-        })
-        .eq("id", exportRecord.id);
-
-      setDownloadUrl(downloadUrl);
+      if (downloadUrl) {
+        setDownloadUrl(downloadUrl);
+      }
       setIsComplete(true);
       
       // Show results panel for export
-      if (type === "export") {
+      if (type === "export" && exportFolder) {
         setShowResults(true);
       }
       
@@ -192,7 +173,7 @@ export function ExportModal({
           </DialogTitle>
           <DialogDescription>
             {type === "export"
-              ? "Select the files you want to generate for Camunda import."
+              ? "We'll generate the Manual Service BPMN and one BPMN per subprocess. The Manual Service BPMN will be enriched (FEEL conditions & form bindings). Webforms are generated only for the Manual Service (start and user tasks). Everything is packaged and ready for Camunda import."
               : "Analyze the process for automation opportunities and generate a Change Report."}
           </DialogDescription>
         </DialogHeader>
@@ -201,36 +182,16 @@ export function ExportModal({
           {!isProcessing && !isComplete && (
             <>
               {type === "export" && (
-                <div className="space-y-4">
-                  <div className="flex items-center space-x-3">
-                    <Checkbox
-                      id="bpmn"
-                      checked={generateBpmn}
-                      onCheckedChange={(checked) => setGenerateBpmn(checked as boolean)}
-                    />
-                    <label
-                      htmlFor="bpmn"
-                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                    >
-                      Generate BPMN 2.0 files
-                    </label>
-                  </div>
-                  <div className="flex items-center space-x-3">
-                    <Checkbox
-                      id="forms"
-                      checked={generateForms}
-                      onCheckedChange={(checked) => setGenerateForms(checked as boolean)}
-                    />
-                    <label
-                      htmlFor="forms"
-                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                    >
-                      Generate Basic Forms
-                    </label>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-2">
-                    These files will be linked and prepared for Camunda import.
+                <div className="bg-muted/50 p-4 rounded-lg">
+                  <p className="text-sm text-foreground">
+                    The export will include:
                   </p>
+                  <ul className="list-disc list-inside text-sm text-muted-foreground mt-2 space-y-1">
+                    <li><strong>Main BPMN</strong>: Enriched with FEEL conditions and form bindings</li>
+                    <li><strong>Subprocess BPMNs</strong>: One per subprocess (unchanged)</li>
+                    <li><strong>Forms</strong>: Generated for Manual Service start and user tasks</li>
+                    <li><strong>Manifest</strong>: Mapping of forms to process nodes</li>
+                  </ul>
                 </div>
               )}
 
@@ -247,10 +208,7 @@ export function ExportModal({
                 <Button variant="outline" onClick={handleClose}>
                   Cancel
                 </Button>
-                <Button
-                  onClick={handleStartExport}
-                  disabled={type === "export" && !generateBpmn && !generateForms}
-                >
+                <Button onClick={handleStartExport}>
                   {type === "export" ? "Start Export" : "Start Analysis"}
                 </Button>
               </div>
@@ -276,7 +234,7 @@ export function ExportModal({
                   {type === "export" ? "Export completed successfully!" : "Analysis completed successfully!"}
                 </p>
                 <p className="text-sm text-muted-foreground text-center">
-                  Your {type === "export" ? "package" : "report"} is ready to download.
+                  Your {type === "export" ? "package" : "report"} is ready.
                 </p>
               </div>
 

@@ -142,9 +142,9 @@ export function ExportResultsPanel({ serviceId, serviceName }: ExportResultsPane
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle>Generated Files</CardTitle>
+              <CardTitle>Export package for: {serviceName}</CardTitle>
               <CardDescription>
-                Export package for: {serviceName}
+                Generated one <strong>Manual Service BPMN</strong> (enriched), <strong>{subprocessBpmns.length} subprocess BPMNs</strong>, <strong>{forms.length} forms</strong> for the Manual Service, and a <strong>manifest</strong>. All files are packaged for Camunda import.
               </CardDescription>
             </div>
             <Button onClick={handleDownloadZip} variant="outline">

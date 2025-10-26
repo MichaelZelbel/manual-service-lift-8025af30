@@ -1,18 +1,13 @@
 // /src/utils/loadFormTemplates.js
 import { supabase } from "@/integrations/supabase/client";
 
-let cache = null;
-
 export async function loadFormTemplates() {
-  if (cache) return cache;
-
   const [firstStep, nextStep] = await Promise.all([
     fetchTemplate("START_NODE", "start-node.form"),
     fetchTemplate("TASK_NODE",  "task-node.form"),
   ]);
 
-  cache = { firstStep, nextStep };
-  return cache;
+  return { firstStep, nextStep };
 }
 
 /**

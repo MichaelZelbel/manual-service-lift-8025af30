@@ -4,6 +4,7 @@ import { loadFormTemplates } from '@/utils/loadFormTemplates.js';
 import { getExportModeler } from '@/utils/getExportModeler.js';
 import { generateBundle } from '../../lib/formgen-core.js';
 import { fetchStepDescription } from '@/integrations/supabase/descriptions';
+import { fetchReferencesForService } from '@/integrations/mds/references';
 
 /**
  * Generates enriched BPMN + forms for Manual Service and combines with subprocess BPMNs.
@@ -26,6 +27,9 @@ export async function generateAndUploadBundle({
     ? bpmnModeler
     : await getExportModeler(assertString(manualServiceBpmnXml, 'manualServiceBpmnXml'));
 
+  // 1.5) Fetch all references for this service
+  const referencesMap = await fetchReferencesForService(String(serviceId));
+
   // 2) Generate enriched main BPMN + forms
   const { updatedBpmnXml, forms, manifest } = await generateBundle({
     serviceName,
@@ -34,20 +38,20 @@ export async function generateAndUploadBundle({
     resolveDescriptions: async (node) => {
       try {
         const fromDbByName = await fetchStepDescription(String(serviceName), String(node?.id || ""));
-        if (fromDbByName && fromDbByName.trim()) return { stepDescription: fromDbByName.trim() };
+        if (fromDbByName && fromDbByName.trim()) return { stepDescription: fromDbByName.trim(), references: referencesMap[node.id] || [] };
         const fromDbById = await fetchStepDescription(String(serviceId), String(node?.id || ""));
-        if (fromDbById && fromDbById.trim()) return { stepDescription: fromDbById.trim() };
+        if (fromDbById && fromDbById.trim()) return { stepDescription: fromDbById.trim(), references: referencesMap[node.id] || [] };
         const docs = node?.businessObject?.documentation;
         if (Array.isArray(docs) && docs.length) {
           const text = docs
             .map((d) => (typeof d?.text === "string" ? d.text : (d?.body || "")))
             .join("\n")
             .trim();
-          return { stepDescription: text };
+          return { stepDescription: text, references: referencesMap[node.id] || [] };
         }
-        return { stepDescription: "" };
+        return { stepDescription: "", references: referencesMap[node.id] || [] };
       } catch {
-        return { stepDescription: "" };
+        return { stepDescription: "", references: [] };
       }
     },
   });

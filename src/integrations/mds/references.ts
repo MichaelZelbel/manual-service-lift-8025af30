@@ -11,7 +11,7 @@ export async function fetchReferencesForService(serviceKey: string): Promise<Ref
   // Query mds_data table for this service and extract URLs
   const { data, error } = await supabase
     .from("mds_data")
-    .select("step_external_id, step_name, sop_urls, decision_sheet_urls")
+    .select("step_external_id, step_name, sop_urls, decision_sheet_urls, sop_titles, decision_sheet_titles")
     .eq("service_external_id", serviceKey);
 
   if (error || !data) {
@@ -26,23 +26,29 @@ export async function fetchReferencesForService(serviceKey: string): Promise<Ref
     
     const refs: StepRef[] = [];
     
-    // Parse SOP URLs
+    // Parse SOP URLs and titles
     if (row.sop_urls) {
       const sopUrls = row.sop_urls.split(',').map(u => u.trim()).filter(Boolean);
+      const sopTitles = row.sop_titles ? row.sop_titles.split(',').map(t => t.trim()).filter(Boolean) : [];
+      
       sopUrls.forEach((url, idx) => {
+        const title = sopTitles[idx] || row.step_name;
         refs.push({
-          name: sopUrls.length > 1 ? `${row.step_name} (${idx + 1})` : row.step_name,
+          name: sopUrls.length > 1 && !sopTitles[idx] ? `${title} (${idx + 1})` : title,
           url
         });
       });
     }
     
-    // Parse Decision Sheet URLs
+    // Parse Decision Sheet URLs and titles
     if (row.decision_sheet_urls) {
       const dsUrls = row.decision_sheet_urls.split(',').map(u => u.trim()).filter(Boolean);
+      const dsTitles = row.decision_sheet_titles ? row.decision_sheet_titles.split(',').map(t => t.trim()).filter(Boolean) : [];
+      
       dsUrls.forEach((url, idx) => {
+        const title = dsTitles[idx] || row.step_name;
         refs.push({
-          name: dsUrls.length > 1 ? `${row.step_name} (${idx + 1})` : row.step_name,
+          name: dsUrls.length > 1 && !dsTitles[idx] ? `${title} (${idx + 1})` : title,
           url
         });
       });

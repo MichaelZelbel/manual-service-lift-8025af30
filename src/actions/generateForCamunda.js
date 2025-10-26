@@ -67,7 +67,7 @@ export async function generateAndUploadBundle({
   
   // Add forms
   for (const form of forms) {
-    zip.file(`forms/${form.filename}`, form.json);
+    zip.file(`forms/${form.filename}`, JSON.stringify(form.json, null, 2));
   }
   
   // Add manifest
@@ -100,7 +100,7 @@ export async function generateAndUploadBundle({
   for (const form of forms) {
     await supabase.storage
       .from('exports')
-      .upload(`${exportFolder}/forms/${form.filename}`, form.json, {
+      .upload(`${exportFolder}/forms/${form.filename}`, JSON.stringify(form.json, null, 2), {
         contentType: 'application/json',
         upsert: true,
       });

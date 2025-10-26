@@ -147,4 +147,12 @@ All colors MUST be HSL.
   .animate-fade-in {
     animation: fade-in 0.6s ease-out;
   }
+  
+  /* Make markdown bold text (** **) in form-js prominent like headings */
+  .fjs-container strong,
+  .fjs-form strong {
+    @apply text-2xl font-bold text-foreground;
+    display: block;
+    margin-bottom: 0.5rem;
+  }
 }

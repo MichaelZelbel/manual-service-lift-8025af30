@@ -38,12 +38,20 @@ export async function generateAndUploadBundle({
     templates,
     resolveDescriptions: async (node) => {
       try {
-        const stepName = node?.businessObject?.name || node?.id || "";
-        const refs = referencesMap[stepName] || [];
+        const nodeId = node?.id || "";
+        const nodeName = node?.businessObject?.name || "";
         
-        const fromDbByName = await fetchStepDescription(String(serviceName), String(node?.id || ""));
+        // Try matching by node ID first (should match step_external_id)
+        let refs = referencesMap[nodeId] || [];
+        
+        console.log(`[resolveDescriptions] Node ID: ${nodeId}, Name: ${nodeName}, Found ${refs.length} references`);
+        if (refs.length === 0) {
+          console.log(`[resolveDescriptions] Available keys in referencesMap:`, Object.keys(referencesMap));
+        }
+        
+        const fromDbByName = await fetchStepDescription(String(serviceName), String(nodeId));
         if (fromDbByName && fromDbByName.trim()) return { stepDescription: fromDbByName.trim(), references: refs };
-        const fromDbById = await fetchStepDescription(String(serviceId), String(node?.id || ""));
+        const fromDbById = await fetchStepDescription(String(serviceId), String(nodeId));
         if (fromDbById && fromDbById.trim()) return { stepDescription: fromDbById.trim(), references: refs };
         const docs = node?.businessObject?.documentation;
         if (Array.isArray(docs) && docs.length) {

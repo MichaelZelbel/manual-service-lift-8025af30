@@ -29,6 +29,7 @@ export async function generateAndUploadBundle({
 
   // 1.5) Fetch all references for this service
   const referencesMap = await fetchReferencesForService(String(serviceId));
+  console.log('[generateForCamunda] References map:', referencesMap);
 
   // 2) Generate enriched main BPMN + forms
   const { updatedBpmnXml, forms, manifest } = await generateBundle({

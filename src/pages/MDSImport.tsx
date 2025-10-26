@@ -17,8 +17,8 @@ interface MDSRow {
   step_name: string;
   type: string;
   candidate_group?: string;
-  sop_urls?: string;
-  decision_sheet_urls?: string;
+  document_urls?: string;
+  document_name?: string;
   process_step?: number;
 }
 
@@ -200,8 +200,6 @@ const MDSImport = () => {
 
   const mapRowFromHeaders = (headers: string[], values: string[]): MDSRow => {
     const row: any = {};
-    let sopUrl = '';
-    let sopType = '';
     
     headers.forEach((header, idx) => {
       const value = values[idx];
@@ -264,32 +262,16 @@ const MDSImport = () => {
         }
       }
       
-      // URL to SOP/Decision Sheet
+      // SOP/Decision Sheet Name -> document_name
+      else if ((header.includes('sop') || header.includes('decision')) && header.includes('sheet') && header.includes('name')) {
+        row.document_name = value;
+      }
+      
+      // URL to SOP/Decision Sheet -> document_urls
       else if (header.includes('url') && (header.includes('sop') || header.includes('decision'))) {
-        sopUrl = value;
-      }
-      
-      // Type SOP/Decision Sheet
-      else if (header.includes('type') && (header.includes('sop') || header.includes('decision'))) {
-        sopType = value;
-      }
-      
-      // Old format: separate SOP and Decision Sheet URLs
-      else if (header.includes('sop') && header.includes('url') && !header.includes('decision')) {
-        row.sop_urls = value;
-      } else if (header.includes('decision') && header.includes('url')) {
-        row.decision_sheet_urls = value;
+        row.document_urls = value;
       }
     });
-
-    // Handle combined URL/Type format from MDS export
-    if (sopUrl && sopType) {
-      if (sopType.toLowerCase().includes('sop')) {
-        row.sop_urls = sopUrl;
-      } else if (sopType.toLowerCase().includes('decision')) {
-        row.decision_sheet_urls = sopUrl;
-      }
-    }
 
     return row;
   };

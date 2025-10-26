@@ -58,18 +58,21 @@ export function useBpmnModeler({ entityId, entityType, onAutoSave }: UseBpmnMode
 
   // Detect corrupted XML (HTML-wrapped or lowercased BPMN tags/attrs)
   const isCorruptedXml = (xml: string): boolean => {
-    const lc = xml.toLowerCase();
+    // Direct HTML markers = definitely corrupted
+    if (xml.includes('<html') || xml.includes('<body')) return true;
+
+    // Detect lowercased BPMN tags/attributes in the ORIGINAL (case-sensitive) string.
+    // Valid BPMN uses camelCase attributes like targetNamespace, exporterVersion, isExecutable, sourceRef, targetRef
+    // and tag names like <bpmn:StartEvent>, <bpmndi:BPMNDiagram>, <dc:Bounds>.
     return (
-      lc.includes('<html') ||
-      lc.includes('<body') ||
-      lc.includes('<bpmn:startevent') ||
-      lc.includes('targetnamespace=') ||
-      lc.includes('exporterversion=') ||
-      lc.includes('isexecutable=') ||
-      lc.includes('<bpmndi:bpmndiagram') ||
-      lc.includes('<dc:bounds') ||
-      lc.includes('sourceref=') ||
-      lc.includes('targetref=')
+      xml.includes('<bpmn:startevent') || // should be <bpmn:StartEvent>
+      xml.includes('<bpmndi:bpmndiagram') || // should be <bpmndi:BPMNDiagram>
+      xml.includes('<dc:bounds') || // should be <dc:Bounds>
+      xml.includes('targetnamespace=') || // should be targetNamespace=
+      xml.includes('exporterversion=') || // should be exporterVersion=
+      xml.includes('isexecutable=') || // should be isExecutable=
+      xml.includes('sourceref=') || // should be sourceRef=
+      xml.includes('targetref=') // should be targetRef=
     );
   };
 

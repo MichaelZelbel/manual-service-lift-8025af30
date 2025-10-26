@@ -33,8 +33,10 @@ export async function generateAndUploadBundle({
     templates,
     resolveDescriptions: async (node) => {
       try {
-        const fromDb = await fetchStepDescription(String(serviceName), String(node?.id || ""));
-        if (fromDb && fromDb.trim()) return { stepDescription: fromDb.trim() };
+        const fromDbByName = await fetchStepDescription(String(serviceName), String(node?.id || ""));
+        if (fromDbByName && fromDbByName.trim()) return { stepDescription: fromDbByName.trim() };
+        const fromDbById = await fetchStepDescription(String(serviceId), String(node?.id || ""));
+        if (fromDbById && fromDbById.trim()) return { stepDescription: fromDbById.trim() };
         const docs = node?.businessObject?.documentation;
         if (Array.isArray(docs) && docs.length) {
           const text = docs
@@ -44,9 +46,6 @@ export async function generateAndUploadBundle({
           return { stepDescription: text };
         }
         return { stepDescription: "" };
-      } catch {
-        return { stepDescription: "" };
-      }
     },
   });
 

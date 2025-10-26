@@ -4,14 +4,14 @@ export type StepRef = { name: string; url: string };
 export type RefMap = Record<string, StepRef[]>; // step_external_id -> refs[]
 
 /**
- * Fetch all references (SOPs, Decision Sheets) for a service from MDS data.
+ * Fetch all references (documents) for a service from MDS data.
  * Returns a map of step_external_id -> array of { name, url }
  */
 export async function fetchReferencesForService(serviceKey: string): Promise<RefMap> {
   // Query mds_data table for this service and extract URLs
   const { data, error } = await supabase
     .from("mds_data")
-    .select("step_external_id, step_name, sop_urls, decision_sheet_urls, document_name")
+    .select("step_external_id, step_name, document_urls, document_name")
     .eq("service_external_id", serviceKey);
 
   if (error || !data) {
@@ -29,23 +29,12 @@ export async function fetchReferencesForService(serviceKey: string): Promise<Ref
     // Use document_name (Column G: SOP/Decision Sheet Name) as the link text
     const documentTitle = row.document_name || row.step_name;
     
-    // Parse SOP URLs
-    if (row.sop_urls) {
-      const sopUrls = row.sop_urls.split(',').map(u => u.trim()).filter(Boolean);
-      sopUrls.forEach((url, idx) => {
+    // Parse document URLs (can be comma-separated)
+    if (row.document_urls) {
+      const urls = row.document_urls.split(',').map(u => u.trim()).filter(Boolean);
+      urls.forEach((url, idx) => {
         refs.push({
-          name: sopUrls.length > 1 ? `${documentTitle} (${idx + 1})` : documentTitle,
-          url
-        });
-      });
-    }
-    
-    // Parse Decision Sheet URLs
-    if (row.decision_sheet_urls) {
-      const dsUrls = row.decision_sheet_urls.split(',').map(u => u.trim()).filter(Boolean);
-      dsUrls.forEach((url, idx) => {
-        refs.push({
-          name: dsUrls.length > 1 ? `${documentTitle} (${idx + 1})` : documentTitle,
+          name: urls.length > 1 ? `${documentTitle} (${idx + 1})` : documentTitle,
           url
         });
       });

@@ -256,8 +256,8 @@ export type Database = {
       mds_data: {
         Row: {
           candidate_group: string | null
-          decision_sheet_urls: string | null
           document_name: string | null
+          document_urls: string | null
           id: string
           imported_at: string | null
           performer_org: string
@@ -266,15 +266,14 @@ export type Database = {
           row_hash: string
           service_external_id: string
           service_name: string
-          sop_urls: string | null
           step_external_id: string
           step_name: string
           type: string
         }
         Insert: {
           candidate_group?: string | null
-          decision_sheet_urls?: string | null
           document_name?: string | null
+          document_urls?: string | null
           id?: string
           imported_at?: string | null
           performer_org: string
@@ -283,15 +282,14 @@ export type Database = {
           row_hash: string
           service_external_id: string
           service_name: string
-          sop_urls?: string | null
           step_external_id: string
           step_name: string
           type: string
         }
         Update: {
           candidate_group?: string | null
-          decision_sheet_urls?: string | null
           document_name?: string | null
+          document_urls?: string | null
           id?: string
           imported_at?: string | null
           performer_org?: string
@@ -300,7 +298,6 @@ export type Database = {
           row_hash?: string
           service_external_id?: string
           service_name?: string
-          sop_urls?: string | null
           step_external_id?: string
           step_name?: string
           type?: string

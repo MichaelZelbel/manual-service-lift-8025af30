@@ -14,14 +14,13 @@ interface MDSRow {
   step_name: string;
   type: string;
   candidate_group?: string;
-  sop_urls?: string;
-  decision_sheet_urls?: string;
+  document_urls?: string;
   document_name?: string;
   process_step?: number;
 }
 
 function generateRowHash(row: MDSRow): string {
-  const hashInput = `${row.service_external_id}|${row.step_external_id}|${row.step_name}|${row.type}|${row.candidate_group}|${row.sop_urls}|${row.decision_sheet_urls}|${row.document_name}|${row.process_step}`;
+  const hashInput = `${row.service_external_id}|${row.step_external_id}|${row.step_name}|${row.type}|${row.candidate_group}|${row.document_urls}|${row.document_name}|${row.process_step}`;
   return btoa(hashInput);
 }
 
@@ -78,8 +77,7 @@ Deno.serve(async (req) => {
             step_name: row.step_name,
             type: row.type,
             candidate_group: row.candidate_group || null,
-            sop_urls: row.sop_urls || null,
-            decision_sheet_urls: row.decision_sheet_urls || null,
+            document_urls: row.document_urls || null,
             document_name: row.document_name || null,
             process_step: row.process_step || null,
             row_hash: rowHash,

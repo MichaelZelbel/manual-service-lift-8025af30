@@ -12,10 +12,12 @@ export async function generateAndUploadBundle({
   bpmnModeler,
   templates,
 }) {
+  // Import BpmnJS for parsing subprocess XMLs
+  const BpmnJS = (await import('bpmn-js/lib/Modeler')).default;
+  
   // 1. Generate enriched main BPMN + forms using formgen-core
-  // Dynamic import to avoid parsing issues
   const { generateBundle } = await import('/lib/formgen-core.js');
-  const { updatedBpmnXml, forms, manifest } = await generateBundle({
+  const { updatedBpmnXml, forms: mainForms, manifest: mainManifest } = await generateBundle({
     serviceName,
     bpmnModeler,
     templates,
@@ -29,16 +31,54 @@ export async function generateAndUploadBundle({
 
   if (subError) throw new Error(`Failed to fetch subprocesses: ${subError.message}`);
 
+  // 3. Process each subprocess to generate forms for its UserTasks
   const subprocessBpmns = [];
+  const allForms = [...mainForms];
+  
   for (const subprocess of subprocesses || []) {
     const bpmnXml = subprocess.edited_bpmn_xml || subprocess.original_bpmn_xml;
-    if (bpmnXml) {
-      const filename = sanitizeFilename(subprocess.name);
-      subprocessBpmns.push({ filename: `subprocess-${filename}.bpmn`, xml: bpmnXml });
+    if (!bpmnXml) continue;
+
+    const filename = sanitizeFilename(subprocess.name);
+    
+    try {
+      // Create a temporary modeler for this subprocess
+      const subModeler = new BpmnJS();
+      await subModeler.importXML(bpmnXml);
+      
+      // Generate forms for this subprocess
+      const { updatedBpmnXml: subUpdatedXml, forms: subForms } = await generateBundle({
+        serviceName: subprocess.name,
+        bpmnModeler: subModeler,
+        templates,
+      });
+      
+      // Add subprocess forms to the collection
+      allForms.push(...subForms);
+      
+      // Store updated subprocess BPMN (with form bindings)
+      subprocessBpmns.push({
+        id: subprocess.id,
+        filename: `subprocess-${filename}.bpmn`,
+        xml: subUpdatedXml,
+        name: subprocess.name,
+      });
+      
+      // Clean up
+      subModeler.destroy();
+    } catch (err) {
+      console.error(`Failed to process subprocess ${subprocess.name}:`, err);
+      // Fallback: use original XML without forms
+      subprocessBpmns.push({
+        id: subprocess.id,
+        filename: `subprocess-${filename}.bpmn`,
+        xml: bpmnXml,
+        name: subprocess.name,
+      });
     }
   }
 
-  // 3. Build enhanced manifest
+  // 4. Build enhanced manifest
   const enhancedManifest = {
     serviceExternalId: serviceId,
     serviceName,
@@ -46,27 +86,34 @@ export async function generateAndUploadBundle({
     bpmn: {
       main: { filename: 'manual-service.bpmn' },
       subprocesses: subprocessBpmns.map((sp, idx) => ({
+        subprocessId: sp.id,
         stepExternalId: `STEP-${String(idx + 1).padStart(2, '0')}`,
         filename: `subprocesses/${sp.filename}`,
-        taskName: sp.filename.replace('subprocess-', '').replace('.bpmn', ''),
+        taskName: sp.name,
+        calledElement: sp.filename.replace('.bpmn', ''),
       })),
     },
-    forms: manifest.forms,
+    forms: allForms.map(({ nodeId, name, filename, formId }) => ({
+      nodeId,
+      name,
+      filename: `forms/${filename}`,
+      formId,
+    })),
   };
 
-  // 4. Create ZIP package
+  // 5. Create ZIP package
   const zip = new JSZip();
   
   // Add main BPMN (enriched)
   zip.file('manual-service.bpmn', updatedBpmnXml);
   
-  // Add subprocess BPMNs
+  // Add subprocess BPMNs (with form bindings)
   for (const { filename, xml } of subprocessBpmns) {
     zip.file(`subprocesses/${filename}`, xml);
   }
   
-  // Add forms
-  for (const form of forms) {
+  // Add all forms (main + subprocess)
+  for (const form of allForms) {
     zip.file(`forms/${form.filename}`, JSON.stringify(form.json, null, 2));
   }
   
@@ -75,7 +122,7 @@ export async function generateAndUploadBundle({
   
   const zipBinary = await zip.generateAsync({ type: 'uint8array' });
 
-  // 5. Upload to Supabase storage
+  // 6. Upload to Supabase storage
   const exportFolder = `${serviceId}/${Date.now()}`;
 
   // Upload main BPMN
@@ -86,7 +133,7 @@ export async function generateAndUploadBundle({
       upsert: true,
     });
 
-  // Upload subprocess BPMNs
+  // Upload subprocess BPMNs (with form bindings)
   for (const { filename, xml } of subprocessBpmns) {
     await supabase.storage
       .from('exports')
@@ -96,8 +143,8 @@ export async function generateAndUploadBundle({
       });
   }
 
-  // Upload forms
-  for (const form of forms) {
+  // Upload all forms (main + subprocess)
+  for (const form of allForms) {
     await supabase.storage
       .from('exports')
       .upload(`${exportFolder}/forms/${form.filename}`, JSON.stringify(form.json, null, 2), {
@@ -134,7 +181,7 @@ export async function generateAndUploadBundle({
   return {
     exportFolder,
     manifest: enhancedManifest,
-    formsCount: forms.length,
+    formsCount: allForms.length,
     subprocessCount: subprocessBpmns.length,
   };
 }

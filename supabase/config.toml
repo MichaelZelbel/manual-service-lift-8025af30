@@ -23,3 +23,6 @@ verify_jwt = false
 
 [functions.list-exports]
 verify_jwt = false
+
+[functions.upload-export]
+verify_jwt = false

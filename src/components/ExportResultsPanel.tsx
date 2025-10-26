@@ -44,17 +44,34 @@ export function ExportResultsPanel({ serviceId, serviceName }: ExportResultsPane
       const response = await fetch(url);
 
       if (!response.ok) {
-        throw new Error('Failed to load export files');
+        if (response.status === 404) {
+          toast.error('No export files found. The upload may have failed.');
+          setFiles([]);
+          setManifest(null);
+          return;
+        }
+        throw new Error(`Failed to load export files: ${response.statusText}`);
       }
 
       const data = await response.json();
-      if (!data) throw new Error('No export data returned');
+      if (!data) {
+        toast.error('No export data returned from server');
+        setFiles([]);
+        setManifest(null);
+        return;
+      }
 
       setFiles(data.files || []);
       setManifest(data.manifest || null);
+      
+      if (!data.files || data.files.length === 0) {
+        toast.warning('Export folder is empty. Please try exporting again.');
+      }
     } catch (error) {
       console.error('Error loading exports:', error);
-      toast.error('Failed to load export files');
+      toast.error(error instanceof Error ? error.message : 'Failed to load export files');
+      setFiles([]);
+      setManifest(null);
     } finally {
       setLoading(false);
     }
@@ -130,6 +147,28 @@ export function ExportResultsPanel({ serviceId, serviceName }: ExportResultsPane
         <CardContent>
           <div className="flex items-center justify-center py-8">
             <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full"></div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!loading && files.length === 0) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>No Files Found</CardTitle>
+          <CardDescription>No export files were generated.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col items-center justify-center py-8 space-y-4">
+            <p className="text-sm text-muted-foreground text-center">
+              The export process may have failed or no files were uploaded.
+              Please try exporting again.
+            </p>
+            <Button onClick={loadExportFiles} variant="outline">
+              Retry Loading
+            </Button>
           </div>
         </CardContent>
       </Card>

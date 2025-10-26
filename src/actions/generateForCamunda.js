@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { loadFormTemplates } from '@/utils/loadFormTemplates.js';
 import { getExportModeler } from '@/utils/getExportModeler.js';
 import { generateBundle } from '../../lib/formgen-core.js';
+import { fetchStepDescription } from '@/integrations/supabase/descriptions';
 
 /**
  * Generates enriched BPMN + forms for Manual Service and combines with subprocess BPMNs.
@@ -30,6 +31,23 @@ export async function generateAndUploadBundle({
     serviceName,
     bpmnModeler: modeler,
     templates,
+    resolveDescriptions: async (node) => {
+      try {
+        const fromDb = await fetchStepDescription(String(serviceId), String(node?.id || ""));
+        if (fromDb && fromDb.trim()) return { stepDescription: fromDb.trim() };
+        const docs = node?.businessObject?.documentation;
+        if (Array.isArray(docs) && docs.length) {
+          const text = docs
+            .map((d) => (typeof d?.text === "string" ? d.text : (d?.body || "")))
+            .join("\n")
+            .trim();
+          return { stepDescription: text };
+        }
+        return { stepDescription: "" };
+      } catch {
+        return { stepDescription: "" };
+      }
+    },
   });
 
   // 3) Fetch subprocess BPMNs from database (unchanged logic)

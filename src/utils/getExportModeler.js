@@ -13,9 +13,10 @@ let headlessModeler = null;
  * @returns {Promise<any>} modeler
  */
 export async function getExportModeler(manualServiceBpmnXml) {
-  if (window.__ACTIVE_BPMN_MODELER__?.get) {
-    return window.__ACTIVE_BPMN_MODELER__;
-  }
+  // Always use a headless modeler for exports to guarantee we load the
+  // exact BPMN XML passed in, avoiding accidental reuse of any visible editor.
+  // (Previously reused window.__ACTIVE_BPMN_MODELER__, which could point to a
+  // different diagram and miss tasks.)
 
   if (!headlessModeler) {
     const container = document.createElement("div");

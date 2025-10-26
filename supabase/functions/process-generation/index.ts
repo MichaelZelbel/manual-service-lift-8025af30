@@ -220,6 +220,71 @@ function isCompleteXML(xml: string): boolean {
   return isBalanced;
 }
 
+/**
+ * Generate a fallback main BPMN with CallActivities for all steps
+ */
+function generateFallbackMainBPMN(serviceName: string, serviceId: string, steps: any[]): string {
+  const callActivities = steps.map((step: any, idx: number) => {
+    const xPos = 210 + (idx * 200);
+    return {
+      xml: `  <bpmn:callActivity id="CallActivity_${idx + 1}" name="${step.name}">
+    <bpmn:extensionElements>
+      <zeebe:calledElement processId="Process_Sub_${step.step_external_id}" propagateAllChildVariables="false" />
+    </bpmn:extensionElements>
+  </bpmn:callActivity>`,
+      shape: `    <bpmndi:BPMNShape id="Shape_CallActivity_${idx + 1}" bpmnElement="CallActivity_${idx + 1}">
+      <dc:Bounds x="${xPos}" y="80" width="100" height="80"/>
+    </bpmndi:BPMNShape>`,
+      xPos
+    };
+  });
+
+  const flows = steps.map((step: any, idx: number) => {
+    const sourceId = idx === 0 ? 'StartEvent_1' : `CallActivity_${idx}`;
+    const targetId = idx === steps.length - 1 ? 'EndEvent_1' : `CallActivity_${idx + 1}`;
+    const sourceX = idx === 0 ? 188 : (210 + ((idx - 1) * 200) + 100);
+    const targetX = idx === steps.length - 1 ? (210 + (idx * 200) + 100 + 30) : (210 + (idx * 200));
+    
+    return {
+      xml: `  <bpmn:sequenceFlow id="Flow_${idx + 1}" sourceRef="${sourceId}" targetRef="${targetId}"/>`,
+      edge: `    <bpmndi:BPMNEdge id="Edge_Flow${idx + 1}" bpmnElement="Flow_${idx + 1}">
+      <di:waypoint x="${sourceX}" y="120"/>
+      <di:waypoint x="${targetX}" y="120"/>
+    </bpmndi:BPMNEdge>`
+    };
+  });
+
+  const endEventX = 210 + (steps.length * 200) + 100 + 12;
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+  xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+  xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+  xmlns:zeebe="http://camunda.org/schema/zeebe/1.0"
+  id="Defs_Main_${serviceId}" targetNamespace="http://camunda.org/examples">
+  <bpmn:process id="Process_Main_${serviceId}" name="${serviceName}" isExecutable="true">
+    <bpmn:startEvent id="StartEvent_1" name="Start"/>
+${callActivities.map(ca => ca.xml).join('\n')}
+    <bpmn:endEvent id="EndEvent_1" name="End"/>
+${flows.map(f => f.xml).join('\n')}
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_${serviceId}">
+    <bpmndi:BPMNPlane id="BPMNPlane_${serviceId}" bpmnElement="Process_Main_${serviceId}">
+      <bpmndi:BPMNShape id="Shape_Start" bpmnElement="StartEvent_1">
+        <dc:Bounds x="152" y="102" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+${callActivities.map(ca => ca.shape).join('\n')}
+      <bpmndi:BPMNShape id="Shape_End" bpmnElement="EndEvent_1">
+        <dc:Bounds x="${endEventX}" y="102" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+${flows.map(f => f.edge).join('\n')}
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>`;
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -527,14 +592,8 @@ Return only valid BPMN 2.0 XML, no other text.`;
     } catch (error) {
       console.error('Failed to generate valid main process, using fallback:', error);
       
-      // Use the prefilled fallback (which is already valid and complete)
-      const { data: prefillData } = await supabase
-        .from('manual_services')
-        .select('original_bpmn_xml')
-        .eq('id', service_external_id)
-        .single();
-      
-      main_bpmn_xml = prefillData?.original_bpmn_xml || FALLBACK_MAIN_TEMPLATE(serviceData.name, service_external_id);
+      // Generate fallback with CallActivities for all steps
+      main_bpmn_xml = generateFallbackMainBPMN(serviceData.name, service_external_id, stepsInfo);
     }
 
     console.log('Persisting to database...');
@@ -548,13 +607,13 @@ Return only valid BPMN 2.0 XML, no other text.`;
       })
       .eq('id', service_external_id);
 
-    // Create subprocesses and manual_service_steps
-    for (let i = 0; i < mdsData.length; i++) {
-      const row = mdsData[i];
-      const subprocessData = subprocesses.find((sp: any) => sp.step_external_id === row.step_external_id);
+    // Create subprocesses and manual_service_steps (using deduplicated stepsInfo)
+    for (let i = 0; i < stepsInfo.length; i++) {
+      const step = stepsInfo[i];
+      const subprocessData = subprocesses.find((sp: any) => sp.step_external_id === step.step_external_id);
 
       if (!subprocessData) {
-        console.error(`No subprocess found for step ${row.step_external_id}`);
+        console.error(`No subprocess found for step ${step.step_external_id}`);
         continue;
       }
 
@@ -563,7 +622,7 @@ Return only valid BPMN 2.0 XML, no other text.`;
         .from('subprocesses')
         .insert({
           service_id: service_external_id,
-          name: row.step_name,
+          name: step.name,
           original_bpmn_xml: subprocessData.subprocess_bpmn_xml,
         })
         .select()
@@ -580,14 +639,14 @@ Return only valid BPMN 2.0 XML, no other text.`;
         .insert({
           service_id: service_external_id,
           subprocess_id: subprocess.id,
-          name: row.step_name,
-          description: row.step_name,
-          step_order: i,
-          original_order: i,
-          candidate_group: row.candidate_group,
+          name: step.name,
+          description: step.name,
+          step_order: step.process_step || (i + 1),
+          original_order: step.process_step || (i + 1),
+          candidate_group: step.candidate_group,
         });
 
-      console.log(`✓ Created subprocess and step for: ${row.step_name}`);
+      console.log(`✓ Created subprocess and step for: ${step.name}`);
     }
 
     console.log('Process generation completed successfully');

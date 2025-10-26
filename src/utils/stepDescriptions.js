@@ -1,15 +1,23 @@
 // /src/utils/stepDescriptions.js
-// Later, we'll back this by a DB table `step_descriptions`:
-// columns: service_id (or name), node_id, step_description (<= 2 sentences), service_description (<= 2 sentences).
-// For now, return empty strings gracefully.
+import { fetchStepDescription, fetchServiceDescription } from '@/integrations/supabase/descriptions';
 
-export async function getStepDescription(serviceName, node /* { id, businessObject } */) {
-  // TODO: replace with DB query; e.g., Supabase table `step_descriptions`.
-  // return row?.step_description || ''
-  return '';
+/**
+ * Get step description from database
+ * @param {string} serviceName - The service key (manual service name)
+ * @param {Object} node - The BPMN node { id, businessObject }
+ * @returns {Promise<string>} The step description (≤2 sentences)
+ */
+export async function getStepDescription(serviceName, node) {
+  if (!serviceName || !node?.id) return '';
+  return await fetchStepDescription(serviceName, node.id);
 }
 
+/**
+ * Get service-level description from database
+ * @param {string} serviceName - The service key (manual service name)
+ * @returns {Promise<string>} The service description (≤2 sentences)
+ */
 export async function getServiceDescription(serviceName) {
-  // TODO: DB query; return short summary for the manual service.
-  return '';
+  if (!serviceName) return '';
+  return await fetchServiceDescription(serviceName);
 }

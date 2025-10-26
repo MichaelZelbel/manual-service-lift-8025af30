@@ -304,6 +304,33 @@ export type Database = {
         }
         Relationships: []
       }
+      step_descriptions: {
+        Row: {
+          id: string
+          node_id: string | null
+          service_description: string | null
+          service_key: string
+          step_description: string | null
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          node_id?: string | null
+          service_description?: string | null
+          service_key: string
+          step_description?: string | null
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          node_id?: string | null
+          service_description?: string | null
+          service_key?: string
+          step_description?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       subprocess_steps: {
         Row: {
           candidate_group: string | null

@@ -46,6 +46,9 @@ export async function generateAndUploadBundle({
           return { stepDescription: text };
         }
         return { stepDescription: "" };
+      } catch {
+        return { stepDescription: "" };
+      }
     },
   });
 

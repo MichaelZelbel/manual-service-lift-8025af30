@@ -2,7 +2,7 @@
 import { supabase } from '@/integrations/supabase/client';
 import { loadFormTemplates } from '@/utils/loadFormTemplates.js';
 import { getExportModeler } from '@/utils/getExportModeler.js';
-import { generateBundle } from '@/lib/formgen-core.js';
+import { generateBundle } from '../../lib/formgen-core.js';
 
 /**
  * Generates enriched BPMN + forms for Manual Service and combines with subprocess BPMNs.

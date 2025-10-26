@@ -31,8 +31,10 @@ export async function generateAndUploadBundle({
   for (const subprocess of subprocesses || []) {
     const bpmnXml = subprocess.edited_bpmn_xml || subprocess.original_bpmn_xml;
     if (bpmnXml) {
-      const filename = sanitizeFilename(subprocess.name);
-      subprocessBpmns.push({ filename: `subprocess-${filename}.bpmn`, xml: bpmnXml });
+      const base = sanitizeFilename(subprocess.name);
+      const suffix = (subprocess.id || '').toString().slice(0, 8);
+      const unique = suffix ? `${base}-${suffix}` : base;
+      subprocessBpmns.push({ filename: `subprocess-${unique}.bpmn`, xml: bpmnXml });
     }
   }
 

@@ -607,6 +607,71 @@ Return only valid BPMN 2.0 XML, no other text.`;
       })
       .eq('id', service_external_id);
 
+    // Generate and upsert service/step descriptions using AI
+    try {
+      // Extract CallActivities from main BPMN to map ids to names
+      const caMatches = Array.from(main_bpmn_xml.matchAll(/<bpmn:callActivity[^>]*id=\"([^\"]+)\"[^>]*name=\"([^\"]+)\"/g));
+      const callActivities = caMatches.map((m) => ({ id: m[1], name: m[2] }));
+
+      const stepsList = callActivities.map((ca) => `- ${ca.name}`).join('\n');
+      const descPrompt = `You are writing short process descriptions. For the service "${serviceData.name}", write a concise service description (<=2 sentences). Then write concise descriptions (<=2 sentences) for each listed step. Return STRICT JSON only with structure: {\n  "serviceDescription": "...",\n  "steps": [ { "name": "Step Name", "description": "..." } ]\n}\n\nSteps:\n${stepsList}`;
+
+      const descText = await callClaude(descPrompt, ANTHROPIC_API_KEY);
+      let jsonStr = descText.trim().replace(/```json|```/g, '').trim();
+      let parsed: any = null;
+      try {
+        parsed = JSON.parse(jsonStr);
+      } catch (_) {
+        const m = descText.match(/\{[\s\S]*\}/);
+        if (m) {
+          try { parsed = JSON.parse(m[0]); } catch {} 
+        }
+      }
+
+      const serviceDescription = String(parsed?.serviceDescription || '').trim();
+      const stepDescByName = new Map<string, string>();
+      for (const s of (parsed?.steps || [])) {
+        if (s?.name && s?.description) stepDescByName.set(String(s.name), String(s.description));
+      }
+
+      const rows: Array<{ service_key: string; node_id: string | null; step_description: string | null; service_description: string | null; updated_at: string; }> = [];
+      if (serviceDescription) {
+        rows.push({
+          service_key: serviceData.name,
+          node_id: null,
+          step_description: null,
+          service_description: serviceDescription,
+          updated_at: new Date().toISOString()
+        });
+      }
+
+      for (const ca of callActivities) {
+        const desc = (stepDescByName.get(ca.name) || '').trim();
+        if (desc) {
+          rows.push({
+            service_key: serviceData.name,
+            node_id: ca.id,
+            step_description: desc,
+            service_description: null,
+            updated_at: new Date().toISOString()
+          });
+        }
+      }
+
+      if (rows.length) {
+        const { error: upsertErr } = await supabase
+          .from('step_descriptions')
+          .upsert(rows, { onConflict: 'service_key,node_id' });
+        if (upsertErr) {
+          console.error('Failed to upsert step_descriptions:', upsertErr);
+        } else {
+          console.log(`Upserted ${rows.length} description rows for service ${serviceData.name}`);
+        }
+      }
+    } catch (e) {
+      console.warn('Description generation skipped:', e);
+    }
+
     // Create subprocesses and manual_service_steps (using deduplicated stepsInfo)
     for (let i = 0; i < stepsInfo.length; i++) {
       const step = stepsInfo[i];

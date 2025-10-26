@@ -173,7 +173,7 @@ export function ExportModal({
           </DialogTitle>
           <DialogDescription>
             {type === "export"
-              ? "We'll generate the Manual Service BPMN and one BPMN per subprocess. The Manual Service BPMN will be enriched (FEEL conditions & form bindings). Webforms are generated only for the Manual Service (start and user tasks). Everything is packaged and ready for Camunda import."
+              ? "We'll generate the Manual Service BPMN and one BPMN per subprocess. The Manual Service BPMN will be enriched (FEEL conditions & form bindings). Webforms are generated for the Manual Service start node and each process step. Everything is packaged and ready for Camunda import."
               : "Analyze the process for automation opportunities and generate a Change Report."}
           </DialogDescription>
         </DialogHeader>

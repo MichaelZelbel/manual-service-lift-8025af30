@@ -154,7 +154,7 @@ async function callClaude(prompt: string, apiKey: string, retryCount = 0): Promi
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-5',
-        max_tokens: 2500,
+        max_tokens: 8000,
         temperature: 0.2,
         system: SYSTEM_PROMPT,
         messages: [{ role: 'user', content: prompt }]
@@ -193,6 +193,31 @@ function extractXML(text: string): string {
   }
   
   return xml;
+}
+
+/**
+ * Validate that generated XML is complete and well-formed
+ */
+function isCompleteXML(xml: string): boolean {
+  const trimmed = xml.trim();
+  
+  // Check for proper closing of root element
+  if (!trimmed.endsWith('</bpmn:definitions>')) {
+    console.error('XML validation failed: missing closing </bpmn:definitions>');
+    return false;
+  }
+  
+  // Basic tag balance check
+  const openTags = (trimmed.match(/<[^/][^>]*[^/]>/g) || []).length;
+  const closeTags = (trimmed.match(/<\/[^>]+>/g) || []).length;
+  const selfClosing = (trimmed.match(/<[^>]+\/>/g) || []).length;
+  
+  const isBalanced = (openTags - selfClosing) === closeTags;
+  if (!isBalanced) {
+    console.error(`XML validation failed: tag mismatch (open: ${openTags}, self-closing: ${selfClosing}, close: ${closeTags})`);
+  }
+  
+  return isBalanced;
 }
 
 Deno.serve(async (req) => {
@@ -322,14 +347,31 @@ Deno.serve(async (req) => {
 
     console.log(`Found ${documents?.length || 0} documents`);
 
-    // Build steps with their PDF information
-    const stepsInfo = mdsData.map((row: any) => {
+    // Build steps with their PDF information - deduplicate by step_external_id
+    const stepMap = new Map();
+    for (const row of mdsData) {
+      if (!stepMap.has(row.step_external_id)) {
+        stepMap.set(row.step_external_id, {
+          step_external_id: row.step_external_id,
+          name: row.step_name,
+          type: row.type || 'regular',
+          candidate_group: row.candidate_group,
+          process_step: row.process_step,
+          allUrls: [],
+        });
+      }
+      const step = stepMap.get(row.step_external_id);
+      
+      // Accumulate URLs from all rows for this step
       const sopUrls = row.sop_urls?.split(',').map((u: string) => u.trim()).filter(Boolean) || [];
       const decisionUrls = row.decision_sheet_urls?.split(',').map((u: string) => u.trim()).filter(Boolean) || [];
-      const allUrls = [...sopUrls, ...decisionUrls];
-      
+      step.allUrls.push(...sopUrls, ...decisionUrls);
+    }
+    
+    // Now build stepsInfo with all accumulated documents per step
+    const stepsInfo = Array.from(stepMap.values()).map((step: any) => {
       const stepDocs = documents?.filter((doc: any) => 
-        allUrls.some(url => doc.source_url === url)
+        step.allUrls.some((url: string) => doc.source_url === url)
       ) || [];
 
       const sop_texts = stepDocs.map((doc: any) => 
@@ -337,13 +379,13 @@ Deno.serve(async (req) => {
       );
 
       return {
-        step_external_id: row.step_external_id,
-        name: row.step_name,
-        type: row.type || 'regular',
-        candidate_group: row.candidate_group,
-        process_step: row.process_step,
+        step_external_id: step.step_external_id,
+        name: step.name,
+        type: step.type,
+        candidate_group: step.candidate_group,
+        process_step: step.process_step,
         sop_texts,
-        pdf_urls: allUrls
+        pdf_urls: step.allUrls
       };
     });
 
@@ -475,10 +517,24 @@ Return only valid BPMN 2.0 XML, no other text.`;
     try {
       const mainXmlResponse = await callClaude(mainPrompt, ANTHROPIC_API_KEY);
       main_bpmn_xml = extractXML(mainXmlResponse);
+      
+      // Validate the generated XML is complete
+      if (!isCompleteXML(main_bpmn_xml)) {
+        throw new Error('Generated XML is incomplete or malformed');
+      }
+      
       console.log('✓ Generated main process');
     } catch (error) {
-      console.error('Failed to generate main process, using fallback:', error);
-      main_bpmn_xml = FALLBACK_MAIN_TEMPLATE(serviceData.name, service_external_id);
+      console.error('Failed to generate valid main process, using fallback:', error);
+      
+      // Use the prefilled fallback (which is already valid and complete)
+      const { data: prefillData } = await supabase
+        .from('manual_services')
+        .select('original_bpmn_xml')
+        .eq('id', service_external_id)
+        .single();
+      
+      main_bpmn_xml = prefillData?.original_bpmn_xml || FALLBACK_MAIN_TEMPLATE(serviceData.name, service_external_id);
     }
 
     console.log('Persisting to database...');

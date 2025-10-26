@@ -150,11 +150,16 @@ All colors MUST be HSL.
   
   /* Make markdown bold text (** **) in form-js prominent like headings */
   .fjs-container strong,
-  .fjs-form strong {
+  .fjs-form strong,
+  .fjs-container .fjs-form-field strong,
+  .fjs-form .fjs-form-field strong,
+  .fjs-container .fjs-text strong,
+  .fjs-form .fjs-text strong {
     font-size: 1.5rem !important;
     font-weight: 700 !important;
     display: block !important;
     margin-bottom: 0.5rem !important;
     line-height: 1.2 !important;
+    margin-top: 0 !important;
   }
 }

@@ -1,25 +1,38 @@
 // /src/actions/generateForCamunda.js
 import { supabase } from '@/integrations/supabase/client';
+import { loadFormTemplates } from '@/src/utils/loadFormTemplates.js';
+import { getExportModeler } from '@/src/utils/getExportModeler.js';
+import { generateBundle } from '@/lib/formgen-core.js';
 
 /**
  * Generates enriched BPMN + forms for Manual Service and combines with subprocess BPMNs.
- * Calls backend function to upload everything to Supabase storage.
+ * Uploads everything via the 'upload-export' edge function (server handles storage).
+ *
+ * Requirements:
+ * - Either pass a live bpmnModeler (visible editor), OR pass manualServiceBpmnXml so we can create a headless one.
  */
 export async function generateAndUploadBundle({
   serviceId,
   serviceName,
-  bpmnModeler,
-  templates,
+  bpmnModeler,            // optional if manualServiceBpmnXml provided
+  manualServiceBpmnXml,   // optional if bpmnModeler provided
 }) {
-  // 1. Generate enriched main BPMN + forms using formgen-core
-  const { generateBundle } = await import('/lib/formgen-core.js');
+  // 0) Load form templates (signed URL flow, with fallback)
+  const templates = await loadFormTemplates();
+
+  // 1) Ensure we have a modeler (reuse visible one, else headless)
+  const modeler = bpmnModeler
+    ? bpmnModeler
+    : await getExportModeler(assertString(manualServiceBpmnXml, 'manualServiceBpmnXml'));
+
+  // 2) Generate enriched main BPMN + forms
   const { updatedBpmnXml, forms, manifest } = await generateBundle({
     serviceName,
-    bpmnModeler,
+    bpmnModeler: modeler,
     templates,
   });
 
-  // 2. Fetch subprocess BPMNs from database
+  // 3) Fetch subprocess BPMNs from database (unchanged logic)
   const { data: subprocesses, error: subError } = await supabase
     .from('subprocesses')
     .select('*')
@@ -38,7 +51,7 @@ export async function generateAndUploadBundle({
     }
   }
 
-  // 3. Build enhanced manifest
+  // 4) Enhanced manifest (keeps your current shape)
   const enhancedManifest = {
     serviceExternalId: serviceId,
     serviceName,
@@ -54,7 +67,7 @@ export async function generateAndUploadBundle({
     forms: manifest.forms,
   };
 
-  // 4. Call backend function to handle uploads
+  // 5) Upload via edge function (same as your current approach)
   const { data, error } = await supabase.functions.invoke('upload-export', {
     body: {
       serviceId,
@@ -84,8 +97,15 @@ export async function generateAndUploadBundle({
 }
 
 function sanitizeFilename(name) {
-  return name
+  return (name || '')
     .replace(/[^a-zA-Z0-9\s-]/g, '')
     .replace(/\s+/g, '-')
     .substring(0, 50);
+}
+
+function assertString(value, name) {
+  if (typeof value !== 'string' || !value.trim()) {
+    throw new Error(`Missing required ${name}: expected non-empty string`);
+  }
+  return value;
 }

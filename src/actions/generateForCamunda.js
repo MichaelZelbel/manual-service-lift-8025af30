@@ -33,7 +33,7 @@ export async function generateAndUploadBundle({
     templates,
     resolveDescriptions: async (node) => {
       try {
-        const fromDb = await fetchStepDescription(String(serviceId), String(node?.id || ""));
+        const fromDb = await fetchStepDescription(String(serviceName), String(node?.id || ""));
         if (fromDb && fromDb.trim()) return { stepDescription: fromDb.trim() };
         const docs = node?.businessObject?.documentation;
         if (Array.isArray(docs) && docs.length) {

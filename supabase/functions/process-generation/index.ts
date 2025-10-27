@@ -224,37 +224,149 @@ function isCompleteXML(xml: string): boolean {
  * Generate a fallback main BPMN with CallActivities for all steps
  */
 function generateFallbackMainBPMN(serviceName: string, serviceId: string, steps: any[]): string {
-  const callActivities = steps.map((step: any, idx: number) => {
-    const xPos = 210 + (idx * 200);
-    return {
-      xml: `  <bpmn:callActivity id="CallActivity_${idx + 1}" name="${step.name}">
+  // Identify first steps (process_step === 1)
+  const firstSteps = steps.filter((step: any) => step.process_step === 1);
+  const hasMultipleFirstSteps = firstSteps.length > 1;
+  const otherSteps = steps.filter((step: any) => step.process_step !== 1);
+  
+  let currentX = 210;
+  const elements: Array<{xml: string, shape: string, id: string, xPos: number}> = [];
+  const flows: Array<{xml: string, edge: string}> = [];
+  
+  // If multiple first steps, create inclusive gateway
+  if (hasMultipleFirstSteps) {
+    // Add inclusive gateway split
+    elements.push({
+      xml: `  <bpmn:inclusiveGateway id="Gateway_Split" name="Split"/>`,
+      shape: `    <bpmndi:BPMNShape id="Shape_Gateway_Split" bpmnElement="Gateway_Split">
+      <dc:Bounds x="${currentX}" y="95" width="50" height="50"/>
+    </bpmndi:BPMNShape>`,
+      id: 'Gateway_Split',
+      xPos: currentX
+    });
+    
+    // Flow from start to gateway
+    flows.push({
+      xml: `  <bpmn:sequenceFlow id="Flow_Start_Gateway" sourceRef="StartEvent_1" targetRef="Gateway_Split"/>`,
+      edge: `    <bpmndi:BPMNEdge id="Edge_Start_Gateway" bpmnElement="Flow_Start_Gateway">
+      <di:waypoint x="188" y="120"/>
+      <di:waypoint x="${currentX + 25}" y="120"/>
+    </bpmndi:BPMNEdge>`
+    });
+    
+    currentX += 150;
+    
+    // Add all first steps in parallel branches
+    const firstStepYPositions = firstSteps.length === 2 ? [40, 160] : 
+                                 firstSteps.length === 3 ? [20, 120, 220] :
+                                 firstSteps.map((_, i) => 20 + (i * 100));
+    
+    firstSteps.forEach((step: any, idx: number) => {
+      const yPos = firstStepYPositions[idx];
+      const callActivityId = `CallActivity_First_${idx + 1}`;
+      
+      elements.push({
+        xml: `  <bpmn:callActivity id="${callActivityId}" name="${step.name}">
     <bpmn:extensionElements>
       <zeebe:calledElement processId="Process_Sub_${step.step_external_id}" propagateAllChildVariables="false" />
     </bpmn:extensionElements>
   </bpmn:callActivity>`,
-      shape: `    <bpmndi:BPMNShape id="Shape_CallActivity_${idx + 1}" bpmnElement="CallActivity_${idx + 1}">
-      <dc:Bounds x="${xPos}" y="80" width="100" height="80"/>
+        shape: `    <bpmndi:BPMNShape id="Shape_${callActivityId}" bpmnElement="${callActivityId}">
+      <dc:Bounds x="${currentX}" y="${yPos}" width="100" height="80"/>
     </bpmndi:BPMNShape>`,
-      xPos
-    };
-  });
-
-  const flows = steps.map((step: any, idx: number) => {
-    const sourceId = idx === 0 ? 'StartEvent_1' : `CallActivity_${idx}`;
-    const targetId = idx === steps.length - 1 ? 'EndEvent_1' : `CallActivity_${idx + 1}`;
-    const sourceX = idx === 0 ? 188 : (210 + ((idx - 1) * 200) + 100);
-    const targetX = idx === steps.length - 1 ? (210 + (idx * 200) + 100 + 30) : (210 + (idx * 200));
-    
-    return {
-      xml: `  <bpmn:sequenceFlow id="Flow_${idx + 1}" sourceRef="${sourceId}" targetRef="${targetId}"/>`,
-      edge: `    <bpmndi:BPMNEdge id="Edge_Flow${idx + 1}" bpmnElement="Flow_${idx + 1}">
-      <di:waypoint x="${sourceX}" y="120"/>
-      <di:waypoint x="${targetX}" y="120"/>
+        id: callActivityId,
+        xPos: currentX
+      });
+      
+      // Flow from gateway to first step
+      flows.push({
+        xml: `  <bpmn:sequenceFlow id="Flow_Gateway_${callActivityId}" sourceRef="Gateway_Split" targetRef="${callActivityId}"/>`,
+        edge: `    <bpmndi:BPMNEdge id="Edge_Gateway_${callActivityId}" bpmnElement="Flow_Gateway_${callActivityId}">
+      <di:waypoint x="${currentX - 125}" y="120"/>
+      <di:waypoint x="${currentX - 125}" y="${yPos + 40}"/>
+      <di:waypoint x="${currentX}" y="${yPos + 40}"/>
     </bpmndi:BPMNEdge>`
-    };
+      });
+    });
+    
+    currentX += 200;
+    
+    // Add inclusive gateway join
+    elements.push({
+      xml: `  <bpmn:inclusiveGateway id="Gateway_Join" name="Join"/>`,
+      shape: `    <bpmndi:BPMNShape id="Shape_Gateway_Join" bpmnElement="Gateway_Join">
+      <dc:Bounds x="${currentX}" y="95" width="50" height="50"/>
+    </bpmndi:BPMNShape>`,
+      id: 'Gateway_Join',
+      xPos: currentX
+    });
+    
+    // Flows from first steps to join gateway
+    firstSteps.forEach((step: any, idx: number) => {
+      const callActivityId = `CallActivity_First_${idx + 1}`;
+      const yPos = firstStepYPositions[idx];
+      
+      flows.push({
+        xml: `  <bpmn:sequenceFlow id="Flow_${callActivityId}_Join" sourceRef="${callActivityId}" targetRef="Gateway_Join"/>`,
+        edge: `    <bpmndi:BPMNEdge id="Edge_${callActivityId}_Join" bpmnElement="Flow_${callActivityId}_Join">
+      <di:waypoint x="${currentX - 100}" y="${yPos + 40}"/>
+      <di:waypoint x="${currentX + 25}" y="${yPos + 40}"/>
+      <di:waypoint x="${currentX + 25}" y="120"/>
+    </bpmndi:BPMNEdge>`
+      });
+    });
+    
+    currentX += 150;
+  }
+  
+  // Add remaining steps sequentially
+  const sequentialSteps = hasMultipleFirstSteps ? otherSteps : steps;
+  sequentialSteps.forEach((step: any, idx: number) => {
+    const callActivityId = `CallActivity_${idx + 1}`;
+    
+    elements.push({
+      xml: `  <bpmn:callActivity id="${callActivityId}" name="${step.name}">
+    <bpmn:extensionElements>
+      <zeebe:calledElement processId="Process_Sub_${step.step_external_id}" propagateAllChildVariables="false" />
+    </bpmn:extensionElements>
+  </bpmn:callActivity>`,
+      shape: `    <bpmndi:BPMNShape id="Shape_${callActivityId}" bpmnElement="${callActivityId}">
+      <dc:Bounds x="${currentX}" y="80" width="100" height="80"/>
+    </bpmndi:BPMNShape>`,
+      id: callActivityId,
+      xPos: currentX
+    });
+    
+    // Flow from previous element
+    const sourceId = idx === 0 ? (hasMultipleFirstSteps ? 'Gateway_Join' : 'StartEvent_1') : `CallActivity_${idx}`;
+    const sourceX = idx === 0 ? (hasMultipleFirstSteps ? currentX - 125 : 188) : currentX - 100;
+    
+    flows.push({
+      xml: `  <bpmn:sequenceFlow id="Flow_Seq_${idx + 1}" sourceRef="${sourceId}" targetRef="${callActivityId}"/>`,
+      edge: `    <bpmndi:BPMNEdge id="Edge_Seq_${idx + 1}" bpmnElement="Flow_Seq_${idx + 1}">
+      <di:waypoint x="${sourceX}" y="120"/>
+      <di:waypoint x="${currentX}" y="120"/>
+    </bpmndi:BPMNEdge>`
+    });
+    
+    currentX += 200;
   });
-
-  const endEventX = 210 + (steps.length * 200) + 100 + 12;
+  
+  // Flow to end event
+  const lastElementId = sequentialSteps.length > 0 
+    ? `CallActivity_${sequentialSteps.length}` 
+    : (hasMultipleFirstSteps ? 'Gateway_Join' : 'StartEvent_1');
+  const lastElementX = currentX - 100;
+  
+  flows.push({
+    xml: `  <bpmn:sequenceFlow id="Flow_To_End" sourceRef="${lastElementId}" targetRef="EndEvent_1"/>`,
+    edge: `    <bpmndi:BPMNEdge id="Edge_To_End" bpmnElement="Flow_To_End">
+      <di:waypoint x="${lastElementX}" y="120"/>
+      <di:waypoint x="${currentX + 12}" y="120"/>
+    </bpmndi:BPMNEdge>`
+  });
+  
+  const endEventX = currentX + 12;
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <bpmn:definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -266,7 +378,7 @@ function generateFallbackMainBPMN(serviceName: string, serviceId: string, steps:
   id="Defs_Main_${serviceId}" targetNamespace="http://camunda.org/examples">
   <bpmn:process id="Process_Main_${serviceId}" name="${serviceName}" isExecutable="true">
     <bpmn:startEvent id="StartEvent_1" name="Start"/>
-${callActivities.map(ca => ca.xml).join('\n')}
+${elements.map(e => e.xml).join('\n')}
     <bpmn:endEvent id="EndEvent_1" name="End"/>
 ${flows.map(f => f.xml).join('\n')}
   </bpmn:process>
@@ -275,7 +387,7 @@ ${flows.map(f => f.xml).join('\n')}
       <bpmndi:BPMNShape id="Shape_Start" bpmnElement="StartEvent_1">
         <dc:Bounds x="152" y="102" width="36" height="36"/>
       </bpmndi:BPMNShape>
-${callActivities.map(ca => ca.shape).join('\n')}
+${elements.map(e => e.shape).join('\n')}
       <bpmndi:BPMNShape id="Shape_End" bpmnElement="EndEvent_1">
         <dc:Bounds x="${endEventX}" y="102" width="36" height="36"/>
       </bpmndi:BPMNShape>

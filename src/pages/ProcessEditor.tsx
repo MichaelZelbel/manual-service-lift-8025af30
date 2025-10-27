@@ -171,7 +171,7 @@ export default function ProcessEditor() {
             <Button variant="outline" size="sm" asChild>
               <label>
                 <Upload className="h-4 w-4 mr-2" />
-                Import BPMN
+                Import
                 <input
                   type="file"
                   accept=".bpmn,.xml"

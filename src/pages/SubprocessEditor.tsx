@@ -251,7 +251,7 @@ export default function SubprocessEditor() {
               variant="outline" 
               size="sm" 
               onClick={handleCheckBpmn}
-              className="bg-[#E6F0FA] text-[#005A9C] hover:bg-[#D0E5F5] hover:text-[#005A9C] border-transparent"
+              className="border-[#005A9C] text-[#005A9C] hover:bg-[#E6F0FA]"
             >
               <CheckCircle className="h-4 w-4 mr-2" />
               Check

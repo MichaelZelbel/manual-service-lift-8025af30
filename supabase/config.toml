@@ -26,3 +26,6 @@ verify_jwt = false
 
 [functions.upload-export]
 verify_jwt = false
+
+[functions.check-bpmn]
+verify_jwt = false

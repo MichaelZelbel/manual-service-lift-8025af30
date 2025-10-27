@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BpmnGraphicalEditor } from "@/components/BpmnGraphicalEditor";
 import { BpmnListEditor } from "@/components/BpmnListEditor";
+import { BpmnCheckModal } from "@/components/BpmnCheckModal";
 import { useBpmnModeler } from "@/hooks/useBpmnModeler";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -14,6 +15,7 @@ import {
   Upload,
   RotateCcw,
   Undo2,
+  CheckCircle,
 } from "lucide-react";
 
 export default function SubprocessEditor() {
@@ -24,6 +26,10 @@ export default function SubprocessEditor() {
   const [serviceId, setServiceId] = useState<string | null>(null);
   const [stepName, setStepName] = useState<string>("");
   const [processName, setProcessName] = useState<string>("");
+  const [checkModalOpen, setCheckModalOpen] = useState(false);
+  const [checkLoading, setCheckLoading] = useState(false);
+  const [checkAssessment, setCheckAssessment] = useState<string | null>(null);
+  const [checkError, setCheckError] = useState<string | null>(null);
 
   const bpmn = useBpmnModeler({
     entityId: id!,
@@ -141,6 +147,44 @@ export default function SubprocessEditor() {
     }
   };
 
+  const handleCheckBpmn = async () => {
+    if (!bpmn.modeler) return;
+    
+    try {
+      setCheckModalOpen(true);
+      setCheckLoading(true);
+      setCheckError(null);
+      setCheckAssessment(null);
+
+      const xml = await bpmn.saveXml();
+      if (!xml) {
+        setCheckError("No BPMN data to check");
+        setCheckLoading(false);
+        return;
+      }
+
+      const { data, error } = await supabase.functions.invoke('check-bpmn', {
+        body: {
+          bpmnXml: xml,
+          isManualService: false,
+        },
+      });
+
+      if (error) throw error;
+
+      if (data.error) {
+        setCheckError(data.error);
+      } else {
+        setCheckAssessment(data.assessment);
+      }
+    } catch (error) {
+      console.error("Error checking BPMN:", error);
+      setCheckError("Could not complete analysis. Please try again.");
+    } finally {
+      setCheckLoading(false);
+    }
+  };
+
   if (bpmn.loading) {
     return (
       <div className="min-h-screen bg-background p-6">
@@ -189,12 +233,12 @@ export default function SubprocessEditor() {
             </Button>
             <Button variant="outline" size="sm" onClick={handleExportBpmn}>
               <Download className="h-4 w-4 mr-2" />
-              Export BPMN
+              Export
             </Button>
             <Button variant="outline" size="sm" asChild>
               <label>
                 <Upload className="h-4 w-4 mr-2" />
-                Import BPMN
+                Import
                 <input
                   type="file"
                   accept=".bpmn,.xml"
@@ -202,6 +246,15 @@ export default function SubprocessEditor() {
                   className="hidden"
                 />
               </label>
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleCheckBpmn}
+              className="bg-[#E6F0FA] text-[#005A9C] hover:bg-[#D0E5F5] hover:text-[#005A9C] border-transparent"
+            >
+              <CheckCircle className="h-4 w-4 mr-2" />
+              Check
             </Button>
           </div>
         </div>
@@ -228,6 +281,14 @@ export default function SubprocessEditor() {
             )}
           </TabsContent>
         </Tabs>
+
+        <BpmnCheckModal
+          open={checkModalOpen}
+          onOpenChange={setCheckModalOpen}
+          loading={checkLoading}
+          assessment={checkAssessment}
+          error={checkError}
+        />
       </div>
     </div>
   );

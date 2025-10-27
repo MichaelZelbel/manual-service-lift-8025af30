@@ -7,6 +7,7 @@ import { BpmnGraphicalEditor } from "@/components/BpmnGraphicalEditor";
 import { BpmnListEditor } from "@/components/BpmnListEditor";
 import { SubprocessList } from "@/components/SubprocessList";
 import { ExportModal } from "@/components/ExportModal";
+import { BpmnCheckModal } from "@/components/BpmnCheckModal";
 import { useBpmnModeler } from "@/hooks/useBpmnModeler";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -17,12 +18,17 @@ import {
   RotateCcw,
   FileDown,
   Undo2,
+  CheckCircle,
 } from "lucide-react";
 
 export default function ProcessEditor() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [checkModalOpen, setCheckModalOpen] = useState(false);
+  const [checkLoading, setCheckLoading] = useState(false);
+  const [checkAssessment, setCheckAssessment] = useState<string | null>(null);
+  const [checkError, setCheckError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("list");
   const [processName, setProcessName] = useState<string>("");
 
@@ -118,6 +124,44 @@ export default function ProcessEditor() {
     }
   };
 
+  const handleCheckBpmn = async () => {
+    if (!bpmn.modeler) return;
+    
+    try {
+      setCheckModalOpen(true);
+      setCheckLoading(true);
+      setCheckError(null);
+      setCheckAssessment(null);
+
+      const xml = await bpmn.saveXml();
+      if (!xml) {
+        setCheckError("No BPMN data to check");
+        setCheckLoading(false);
+        return;
+      }
+
+      const { data, error } = await supabase.functions.invoke('check-bpmn', {
+        body: {
+          bpmnXml: xml,
+          isManualService: true,
+        },
+      });
+
+      if (error) throw error;
+
+      if (data.error) {
+        setCheckError(data.error);
+      } else {
+        setCheckAssessment(data.assessment);
+      }
+    } catch (error) {
+      console.error("Error checking BPMN:", error);
+      setCheckError("Could not complete analysis. Please try again.");
+    } finally {
+      setCheckLoading(false);
+    }
+  };
+
   if (bpmn.loading) {
     return (
       <div className="min-h-screen bg-background p-6">
@@ -180,6 +224,15 @@ export default function ProcessEditor() {
                 />
               </label>
             </Button>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleCheckBpmn}
+              className="bg-[#E6F0FA] text-[#005A9C] hover:bg-[#D0E5F5] hover:text-[#005A9C] border-transparent"
+            >
+              <CheckCircle className="h-4 w-4 mr-2" />
+              Check
+            </Button>
             <Button variant="default" size="sm" onClick={() => setExportModalOpen(true)}>
               <FileDown className="h-4 w-4 mr-2" />
               Download for Camunda
@@ -217,6 +270,14 @@ export default function ProcessEditor() {
           serviceId={id!}
           serviceName={processName || `Service ${id}`}
           bpmnModeler={bpmn.modeler}
+        />
+
+        <BpmnCheckModal
+          open={checkModalOpen}
+          onOpenChange={setCheckModalOpen}
+          loading={checkLoading}
+          assessment={checkAssessment}
+          error={checkError}
         />
       </div>
     </div>

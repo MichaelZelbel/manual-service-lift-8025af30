@@ -2,6 +2,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import ReactMarkdown from "react-markdown";
 
 interface BpmnCheckModalProps {
   open: boolean;
@@ -44,8 +45,8 @@ export function BpmnCheckModal({
           
           {assessment && !loading && (
             <ScrollArea className="h-full pr-4">
-              <div className="whitespace-pre-wrap text-sm leading-relaxed">
-                {assessment}
+              <div className="prose prose-sm max-w-none dark:prose-invert">
+                <ReactMarkdown>{assessment}</ReactMarkdown>
               </div>
             </ScrollArea>
           )}

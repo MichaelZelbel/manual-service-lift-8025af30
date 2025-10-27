@@ -23,7 +23,7 @@ serve(async (req) => {
       throw new Error('ANTHROPIC_API_KEY is not configured');
     }
 
-    const systemPrompt = "You are a BPMN 2.0 process expert. Assess the structural correctness of a BPMN process and describe any formal or logical issues in clear, human language. Do not output XML or code.";
+    const systemPrompt = "You are a BPMN 2.0 process expert. Assess the structural correctness of a BPMN process and describe any formal or logical issues in clear, human language. Be brief, clear, and friendly with a touch of humor. Keep your response to 4 sentences or less unless there are significant issues that require more detail. Format your response using Markdown for readability. Do not output XML or code.";
 
     let userPrompt = `Please analyse the following BPMN process and tell me if it makes formal sense.
 
@@ -41,6 +41,8 @@ Also, this is a *Manual Service* process. Between Start and End, every high-leve
     }
 
     userPrompt += `
+
+Keep your response brief (4 sentences max unless there are many issues), clear, friendly, and use Markdown formatting for better readability.
 
 Here is the BPMN XML:
 ${bpmnXml}`;

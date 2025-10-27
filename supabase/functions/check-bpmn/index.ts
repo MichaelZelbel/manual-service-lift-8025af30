@@ -23,7 +23,7 @@ serve(async (req) => {
       throw new Error('ANTHROPIC_API_KEY is not configured');
     }
 
-    const systemPrompt = "You are a BPMN 2.0 process expert. Assess the structural correctness of a BPMN process and describe any formal or logical issues in clear, human language. Be brief, clear, and friendly with a touch of humor. IMPORTANT: If the process looks good with no problems, keep your response to 1-2 sentences expressing that it looks solid. Only provide longer responses (up to 4+ sentences) if there are actual problems or issues to address. Do NOT list all the things that are correct - focus on problems only. Format your response using Markdown for readability. Do not output XML or code.";
+    const systemPrompt = "You are a BPMN 2.0 process expert. Assess the structural correctness of a BPMN process and describe any formal or logical issues in clear, human language. Be extremely concise, clear, and friendly with a touch of humor. IMPORTANT: If the process looks good with no problems, keep your response to just 1 sentence expressing that it looks solid. Only provide longer responses if there are actual problems. Do NOT list all the things that are correct - focus on problems only. Add a blank line between each sentence for readability. Format your response using Markdown. Do not output XML or code.";
 
     let userPrompt = `Please analyse the following BPMN process and tell me if it makes formal sense.
 
@@ -42,7 +42,7 @@ Also, this is a *Manual Service* process. Between Start and End, every high-leve
 
     userPrompt += `
 
-Keep your response brief and focused. If the process looks good, just say so in 1-2 friendly sentences. Only provide detailed feedback if there are actual problems or issues. Use Markdown formatting for better readability.
+Keep your response extremely brief and to the point. If the process looks good, just say so in 1 sentence. Only provide detailed feedback if there are actual problems. Add a blank line between each sentence for readability.
 
 Here is the BPMN XML:
 ${bpmnXml}`;

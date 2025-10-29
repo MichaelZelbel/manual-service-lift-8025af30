@@ -136,7 +136,7 @@ export function BpmnListEditor({
   const [newIncomingSource, setNewIncomingSource] = useState<string>("");
   const [newOutgoingTarget, setNewOutgoingTarget] = useState<string>("");
   const [createNodeDialogOpen, setCreateNodeDialogOpen] = useState(false);
-  const [newNodeType, setNewNodeType] = useState<string>("bpmn:UserTask");
+  const [newNodeType, setNewNodeType] = useState<string>(entityType === "service" ? "bpmn:ExclusiveGateway" : "bpmn:UserTask");
   const [newNodeName, setNewNodeName] = useState<string>("");
   const tableName = entityType === "service" ? "manual_services" : "subprocesses";
   const sensors = useSensors(useSensor(PointerSensor), useSensor(KeyboardSensor, {
@@ -645,6 +645,7 @@ export function BpmnListEditor({
               Drag and drop to swap elements in the BPMN diagram. All connections
               are rewired automatically.
               {entityType === "subprocess" && " You can also create and delete nodes."}
+              {entityType === "service" && " You can also add and delete gateways."}
             </p>
           </div>
           <div className="flex gap-2">
@@ -652,6 +653,12 @@ export function BpmnListEditor({
               <Button variant="default" size="sm" onClick={() => setCreateNodeDialogOpen(true)}>
                 <Plus className="h-4 w-4 mr-2" />
                 Create Node
+              </Button>
+            )}
+            {entityType === "service" && (
+              <Button variant="default" size="sm" onClick={() => setCreateNodeDialogOpen(true)}>
+                <Plus className="h-4 w-4 mr-2" />
+                Add Gateway
               </Button>
             )}
             <Button variant="outline" size="sm" onClick={handleUndo}>
@@ -674,7 +681,7 @@ export function BpmnListEditor({
           </p> : <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
             <SortableContext items={filteredElements.map(el => el.id)} strategy={verticalListSortingStrategy}>
               <div className="space-y-3">
-                {filteredElements.map(element => <SortableElement key={element.id} element={element} onShowConnections={setSelectedElement} onEditSubprocess={handleEditSubprocess} canEditSubprocess={entityType === "service"} onDelete={handleDeleteNode} canDelete={entityType === "subprocess"} />)}
+                {filteredElements.map(element => <SortableElement key={element.id} element={element} onShowConnections={setSelectedElement} onEditSubprocess={handleEditSubprocess} canEditSubprocess={entityType === "service"} onDelete={handleDeleteNode} canDelete={entityType === "subprocess" || (entityType === "service" && element.type.includes("Gateway"))} />)}
               </div>
             </SortableContext>
           </DndContext>}
@@ -781,22 +788,28 @@ export function BpmnListEditor({
       <Dialog open={createNodeDialogOpen} onOpenChange={setCreateNodeDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Create New Node</DialogTitle>
+            <DialogTitle>{entityType === "service" ? "Add Gateway" : "Create New Node"}</DialogTitle>
             <DialogDescription>
-              Choose the node type and enter a name for the new element.
+              {entityType === "service" 
+                ? "Choose the gateway type and enter a name for the new gateway."
+                : "Choose the node type and enter a name for the new element."}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">Node Type</label>
+              <label className="text-sm font-medium text-foreground">{entityType === "service" ? "Gateway Type" : "Node Type"}</label>
               <Select value={newNodeType} onValueChange={setNewNodeType}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="bpmn:UserTask">User Task</SelectItem>
-                  <SelectItem value="bpmn:ServiceTask">Service Task</SelectItem>
-                  <SelectItem value="bpmn:Task">Task</SelectItem>
+                  {entityType === "subprocess" && (
+                    <>
+                      <SelectItem value="bpmn:UserTask">User Task</SelectItem>
+                      <SelectItem value="bpmn:ServiceTask">Service Task</SelectItem>
+                      <SelectItem value="bpmn:Task">Task</SelectItem>
+                    </>
+                  )}
                   <SelectItem value="bpmn:ExclusiveGateway">XOR Gateway (Exclusive)</SelectItem>
                   <SelectItem value="bpmn:ParallelGateway">AND Gateway (Parallel)</SelectItem>
                   <SelectItem value="bpmn:InclusiveGateway">OR Gateway (Inclusive)</SelectItem>
@@ -805,9 +818,9 @@ export function BpmnListEditor({
               </Select>
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">Node Name</label>
+              <label className="text-sm font-medium text-foreground">{entityType === "service" ? "Gateway Name" : "Node Name"}</label>
               <Input 
-                placeholder="Enter node name..." 
+                placeholder={entityType === "service" ? "Enter gateway name..." : "Enter node name..."} 
                 value={newNodeName} 
                 onChange={(e) => setNewNodeName(e.target.value)}
                 onKeyDown={(e) => {
@@ -822,12 +835,12 @@ export function BpmnListEditor({
             <Button variant="outline" onClick={() => {
               setCreateNodeDialogOpen(false);
               setNewNodeName("");
-              setNewNodeType("bpmn:UserTask");
+              setNewNodeType(entityType === "service" ? "bpmn:ExclusiveGateway" : "bpmn:UserTask");
             }}>
               Cancel
             </Button>
             <Button onClick={handleCreateNode} disabled={!newNodeName.trim()}>
-              Create
+              {entityType === "service" ? "Add" : "Create"}
             </Button>
           </div>
         </DialogContent>

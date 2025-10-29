@@ -596,10 +596,20 @@ export function BpmnListEditor({
       }
       
       // Add the shape to the diagram
-      modeling.createShape(shape, position, process);
+      const newShape = modeling.createShape(shape, position, process);
+      
+      // Automatically connect to end event
+      const endEvent = elementRegistry.filter((el: any) => el.type === "bpmn:EndEvent")[0];
+      if (endEvent && newShape) {
+        try {
+          modeling.connect(newShape, endEvent);
+        } catch (error) {
+          console.warn("Could not auto-connect to end event:", error);
+        }
+      }
       
       parseElements(modeler);
-      toast.success(`Created '${newNodeName}'`);
+      toast.success(`Created '${newNodeName}' and connected to end event`);
       
       // Reset dialog
       setCreateNodeDialogOpen(false);

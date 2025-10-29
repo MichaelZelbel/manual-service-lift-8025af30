@@ -681,7 +681,7 @@ export function BpmnListEditor({
           </p> : <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
             <SortableContext items={filteredElements.map(el => el.id)} strategy={verticalListSortingStrategy}>
               <div className="space-y-3">
-                {filteredElements.map(element => <SortableElement key={element.id} element={element} onShowConnections={setSelectedElement} onEditSubprocess={handleEditSubprocess} canEditSubprocess={entityType === "service"} onDelete={handleDeleteNode} canDelete={entityType === "subprocess" || (entityType === "service" && element.type.includes("Gateway"))} />)}
+                {filteredElements.map(element => <SortableElement key={element.id} element={element} onShowConnections={setSelectedElement} onEditSubprocess={handleEditSubprocess} canEditSubprocess={entityType === "service" && (element.type.includes("Task") || element.type === "bpmn:CallActivity")} onDelete={handleDeleteNode} canDelete={entityType === "subprocess" || (entityType === "service" && element.type.includes("Gateway"))} />)}
               </div>
             </SortableContext>
           </DndContext>}

@@ -162,4 +162,83 @@ All colors MUST be HSL.
     line-height: 1.2 !important;
     margin-top: 0 !important;
   }
+
+  /* Analysis content styling */
+  .analysis-content h1 {
+    @apply text-3xl font-bold mt-8 mb-4;
+  }
+  
+  .analysis-content h2 {
+    @apply text-2xl font-bold mt-8 mb-4;
+  }
+  
+  .analysis-content h3 {
+    @apply text-xl font-semibold mt-6 mb-3;
+  }
+  
+  .analysis-content p,
+  .analysis-content li {
+    @apply text-foreground;
+    line-height: 1.6;
+  }
+  
+  .analysis-content ul,
+  .analysis-content ol {
+    @apply ml-6 space-y-2;
+  }
+  
+  .analysis-content ul {
+    @apply list-disc;
+  }
+  
+  .analysis-content ol {
+    @apply list-decimal;
+  }
+  
+  .analysis-content strong {
+    @apply font-semibold;
+  }
+  
+  .analysis-content em {
+    @apply italic;
+  }
+
+  /* Print styles */
+  @media print {
+    @page {
+      margin: 2cm;
+    }
+    
+    body {
+      @apply bg-white text-black;
+    }
+    
+    .print\:hidden {
+      display: none !important;
+    }
+    
+    .print\:border-0 {
+      border: 0 !important;
+    }
+    
+    .print\:shadow-none {
+      box-shadow: none !important;
+    }
+    
+    #analysis-content {
+      max-width: 100% !important;
+    }
+    
+    /* Ensure proper page breaks */
+    .analysis-content h1,
+    .analysis-content h2,
+    .analysis-content h3 {
+      page-break-after: avoid;
+    }
+    
+    .analysis-content p,
+    .analysis-content li {
+      page-break-inside: avoid;
+    }
+  }
 }

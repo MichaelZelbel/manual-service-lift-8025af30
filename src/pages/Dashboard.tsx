@@ -319,6 +319,14 @@ const Dashboard = () => {
                     >
                       Backend Analysis
                     </Button>
+                    <Button
+                      onClick={() => navigate(`/analysis/${service.id}`)}
+                      variant="secondary"
+                      className="w-full"
+                      size="sm"
+                    >
+                      Process Analysis
+                    </Button>
                   </div>
                 </CardContent>
               </Card>

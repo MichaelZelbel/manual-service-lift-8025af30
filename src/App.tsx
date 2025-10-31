@@ -11,6 +11,7 @@ import AdminTemplates from "./pages/AdminTemplates";
 import AdminManualServices from "./pages/AdminManualServices";
 import AdminFallbackDiagram from "./pages/AdminFallbackDiagram";
 import MDSImport from "./pages/MDSImport";
+import ProcessAnalysis from "./pages/ProcessAnalysis";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -30,6 +31,7 @@ const App = () => (
           <Route path="/admin/manual-services" element={<AdminManualServices />} />
           <Route path="/admin/fallback-diagram" element={<AdminFallbackDiagram />} />
           <Route path="/admin/mds-import" element={<MDSImport />} />
+          <Route path="/analysis/:id" element={<ProcessAnalysis />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

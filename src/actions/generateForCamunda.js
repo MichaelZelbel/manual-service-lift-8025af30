@@ -40,11 +40,13 @@ export async function generateAndUploadBundle({
       try {
         const nodeId = node?.id || "";
         const nodeName = node?.businessObject?.name || "";
-        const isStartEvent = node?.type === 'bpmn:StartEvent' || node?.businessObject?.$type === 'bpmn:StartEvent';
+        const nodeType = node?.type || node?.businessObject?.$type || "";
+        const isStartEvent = nodeType === 'bpmn:StartEvent';
         
         // Extract step_external_id from zeebe:calledElement if it's a CallActivity
+        // OR for UserTask, query the manual_service_steps table by service_id + element_id
         let stepExternalId = null;
-        if (node?.type === 'bpmn:CallActivity' || node?.businessObject?.$type === 'bpmn:CallActivity') {
+        if (nodeType === 'bpmn:CallActivity') {
           const extensionElements = node?.businessObject?.extensionElements;
           if (extensionElements?.values) {
             const calledElement = extensionElements.values.find((el) => 
@@ -55,6 +57,18 @@ export async function generateAndUploadBundle({
               const match = calledElement.processId.match(/Process_Sub_(.+)/);
               if (match) stepExternalId = match[1];
             }
+          }
+        } else if (nodeType === 'bpmn:UserTask') {
+          // For UserTask, look up step_external_id from manual_service_steps table
+          const { data: step, error: stepError } = await supabase
+            .from('manual_service_steps')
+            .select('step_external_id')
+            .eq('service_id', serviceId)
+            .eq('element_id', nodeId)
+            .maybeSingle();
+          
+          if (!stepError && step?.step_external_id) {
+            stepExternalId = step.step_external_id;
           }
         }
         

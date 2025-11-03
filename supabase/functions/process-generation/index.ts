@@ -673,7 +673,9 @@ Service ID: ${service_external_id}
 Performing Team: ${serviceData.performing_team}
 Performer Org: ${serviceData.performer_org}
 
-Steps (in order):
+CRITICAL: Steps are listed in execution order. The first ${firstSteps.length} step(s) marked [FIRST STEP] must be the first to execute after the start event.
+
+Steps (in execution order):
 ${stepsInfo.map((step: any, idx: number) => `${idx + 1}. ${step.name} (${step.type}${step.candidate_group ? ', group: ' + step.candidate_group : ''})${step.process_step === 1 ? ' [FIRST STEP]' : ''}`).join('\n')}
 
 ${hasMultipleFirstSteps ? `
@@ -682,7 +684,9 @@ IMPORTANT: Multiple steps are marked as FIRST STEPS. You MUST:
 2. Connect the startEvent to this inclusiveGateway
 3. Connect the inclusiveGateway to ALL steps marked as [FIRST STEP]: ${firstSteps.map((s: any) => s.name).join(', ')}
 4. These parallel branches should converge later in the process flow
-` : ''}
+` : `
+The first step (marked [FIRST STEP]) must connect directly from the start event.
+All other steps follow sequentially.`}
 
 Instructions:
 - Use process id="Process_Main_${service_external_id}" name="${serviceData.name}" isExecutable="true"

@@ -660,8 +660,8 @@ Return only valid BPMN 2.0 XML, no other text.`;
     const firstSteps = stepsInfo.filter((step: any) => step.process_step === 1);
     const hasMultipleFirstSteps = firstSteps.length > 1;
     
-    // Generate main process with callActivities
-    const mainPrompt = `Create a main BPMN process that orchestrates the following steps using callActivities.
+    // Generate main process with userTasks
+    const mainPrompt = `Create a main BPMN process that orchestrates the following steps using userTasks.
 
 Service Name: ${serviceData.name}
 Service ID: ${service_external_id}
@@ -685,24 +685,20 @@ All other steps follow sequentially.`}
 
 Instructions:
 - Use process id="Process_Main_${service_external_id}" name="${serviceData.name}" isExecutable="true"
-- For each step, create a bpmn:callActivity with:
-  <bpmn:callActivity id="CallActivity_[index]" name="[step name]">
-    <bpmn:extensionElements>
-      <zeebe:calledElement processId="Process_Sub_[step_external_id]" propagateAllChildVariables="false" />
-    </bpmn:extensionElements>
-  </bpmn:callActivity>
+- For each step, create a bpmn:userTask:
+  <bpmn:userTask id="UserTask_[index]" name="[step name]"></bpmn:userTask>
 - If branching is implied by step names or multiple first steps exist, add appropriate gateways (inclusiveGateway for multiple first steps)
 - Otherwise connect steps sequentially
 - Include ONE bpmn:startEvent at the beginning
 - Include ONE bpmn:endEvent at the end
 
 CRITICAL: Include complete <bpmndi:BPMNDiagram> section:
-- Layout callActivities horizontally starting at x=150, y=80
+- Layout userTasks horizontally starting at x=150, y=80
 - Space elements 200px apart (x positions: 150, 350, 550, 750, etc.)
-- Use dimensions: callActivities (100x80), events (36x36), gateways (50x50)
+- Use dimensions: userTasks (100x80), events (36x36), gateways (50x50)
 - StartEvent at x=152, y=102
-- CallActivities at y=80 with height=80
-- If using inclusiveGateway for multiple first steps, position it at x=250 between start and first callActivities
+- UserTasks at y=80 with height=80
+- If using inclusiveGateway for multiple first steps, position it at x=250 between start and first userTasks
 - Include BPMNShape for every element and BPMNEdge for every sequence flow with proper waypoints
 
 Use proper Camunda 8 namespaces (zeebe, not camunda).
@@ -739,11 +735,11 @@ Return only valid BPMN 2.0 XML, no other text.`;
 
     // Generate and upsert service/step descriptions using AI
     try {
-      // Extract CallActivities from main BPMN to map ids to names
-      const caMatches = Array.from(main_bpmn_xml.matchAll(/<bpmn:callActivity[^>]*id=\"([^\"]+)\"[^>]*name=\"([^\"]+)\"/g));
-      const callActivities = caMatches.map((m) => ({ id: m[1], name: m[2] }));
+      // Extract UserTasks from main BPMN to map ids to names
+      const utMatches = Array.from(main_bpmn_xml.matchAll(/<bpmn:userTask[^>]*id=\"([^\"]+)\"[^>]*name=\"([^\"]+)\"/g));
+      const userTasks = utMatches.map((m) => ({ id: m[1], name: m[2] }));
 
-      const stepsList = callActivities.map((ca) => `- ${ca.name}`).join('\n');
+      const stepsList = userTasks.map((ut) => `- ${ut.name}`).join('\n');
       const descPrompt = `You are writing short process descriptions. For the service "${serviceData.name}", write a concise service description (<=2 sentences). Then write concise descriptions (<=2 sentences) for each listed step. Return STRICT JSON only with structure: {\n  "serviceDescription": "...",\n  "steps": [ { "name": "Step Name", "description": "..." } ]\n}\n\nSteps:\n${stepsList}`;
 
       const descText = await callClaude(descPrompt, ANTHROPIC_API_KEY);
@@ -775,12 +771,12 @@ Return only valid BPMN 2.0 XML, no other text.`;
         });
       }
 
-      for (const ca of callActivities) {
-        const desc = (stepDescByName.get(ca.name) || '').trim();
+      for (const ut of userTasks) {
+        const desc = (stepDescByName.get(ut.name) || '').trim();
         if (desc) {
           rows.push({
             service_key: service_external_id,
-            node_id: ca.id,
+            node_id: ut.id,
             step_description: desc,
             service_description: null,
             updated_at: new Date().toISOString()

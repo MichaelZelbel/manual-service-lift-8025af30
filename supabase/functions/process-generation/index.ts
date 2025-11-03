@@ -320,7 +320,13 @@ function generateFallbackMainBPMN(serviceName: string, serviceId: string, steps:
   }
   
   // Add remaining steps sequentially
-  const sequentialSteps = hasMultipleFirstSteps ? otherSteps : steps;
+  // If we have exactly one first step, put it first, then add others
+  // If we have multiple first steps, they're already handled above, so just add the rest
+  // If we have no first steps, just add all steps in order
+  const sequentialSteps = hasMultipleFirstSteps 
+    ? otherSteps 
+    : (firstSteps.length === 1 ? [...firstSteps, ...otherSteps] : steps);
+  
   sequentialSteps.forEach((step: any, idx: number) => {
     const callActivityId = `CallActivity_${idx + 1}`;
     
@@ -475,11 +481,12 @@ Deno.serve(async (req) => {
       })
       .eq('id', job_id);
 
-    // Fetch MDS data
+    // Fetch MDS data - order by process_step first (nulls last), then by step_external_id
     const { data: mdsData, error: mdsError } = await supabase
       .from('mds_data')
       .select('*')
       .eq('service_external_id', service_external_id)
+      .order('process_step', { nullsFirst: false })
       .order('step_external_id');
 
     if (mdsError || !mdsData || mdsData.length === 0) {
@@ -564,6 +571,18 @@ Deno.serve(async (req) => {
         sop_texts,
         pdf_urls: step.allUrls
       };
+    });
+    
+    // Sort steps: first steps (process_step = 1) first, then others by step_external_id
+    stepsInfo.sort((a: any, b: any) => {
+      const aIsFirst = a.process_step === 1;
+      const bIsFirst = b.process_step === 1;
+      
+      if (aIsFirst && !bIsFirst) return -1;
+      if (!aIsFirst && bIsFirst) return 1;
+      
+      // Both are first or both are not first, sort by step_external_id
+      return String(a.step_external_id).localeCompare(String(b.step_external_id));
     });
 
     console.log('Generating subprocess BPMNs...');

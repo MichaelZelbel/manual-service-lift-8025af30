@@ -223,6 +223,9 @@ function isCompleteXML(xml: string): boolean {
 /**
  * Generate a fallback main BPMN with CallActivities for all steps
  */
+/**
+ * Generate a fallback main BPMN with UserTasks for all steps
+ */
 function generateFallbackMainBPMN(serviceName: string, serviceId: string, steps: any[]): string {
   // Identify first steps (process_step === 1)
   const firstSteps = steps.filter((step: any) => step.process_step === 1);
@@ -263,25 +266,21 @@ function generateFallbackMainBPMN(serviceName: string, serviceId: string, steps:
     
     firstSteps.forEach((step: any, idx: number) => {
       const yPos = firstStepYPositions[idx];
-      const callActivityId = `CallActivity_First_${idx + 1}`;
+      const userTaskId = `UserTask_First_${idx + 1}`;
       
       elements.push({
-        xml: `  <bpmn:callActivity id="${callActivityId}" name="${step.name}">
-    <bpmn:extensionElements>
-      <zeebe:calledElement processId="Process_Sub_${step.step_external_id}" propagateAllChildVariables="false" />
-    </bpmn:extensionElements>
-  </bpmn:callActivity>`,
-        shape: `    <bpmndi:BPMNShape id="Shape_${callActivityId}" bpmnElement="${callActivityId}">
+        xml: `  <bpmn:userTask id="${userTaskId}" name="${step.name}"></bpmn:userTask>`,
+        shape: `    <bpmndi:BPMNShape id="Shape_${userTaskId}" bpmnElement="${userTaskId}">
       <dc:Bounds x="${currentX}" y="${yPos}" width="100" height="80"/>
     </bpmndi:BPMNShape>`,
-        id: callActivityId,
+        id: userTaskId,
         xPos: currentX
       });
       
       // Flow from gateway to first step
       flows.push({
-        xml: `  <bpmn:sequenceFlow id="Flow_Gateway_${callActivityId}" sourceRef="Gateway_Split" targetRef="${callActivityId}"/>`,
-        edge: `    <bpmndi:BPMNEdge id="Edge_Gateway_${callActivityId}" bpmnElement="Flow_Gateway_${callActivityId}">
+        xml: `  <bpmn:sequenceFlow id="Flow_Gateway_${userTaskId}" sourceRef="Gateway_Split" targetRef="${userTaskId}"/>`,
+        edge: `    <bpmndi:BPMNEdge id="Edge_Gateway_${userTaskId}" bpmnElement="Flow_Gateway_${userTaskId}">
       <di:waypoint x="${currentX - 125}" y="120"/>
       <di:waypoint x="${currentX - 125}" y="${yPos + 40}"/>
       <di:waypoint x="${currentX}" y="${yPos + 40}"/>
@@ -303,12 +302,12 @@ function generateFallbackMainBPMN(serviceName: string, serviceId: string, steps:
     
     // Flows from first steps to join gateway
     firstSteps.forEach((step: any, idx: number) => {
-      const callActivityId = `CallActivity_First_${idx + 1}`;
+      const userTaskId = `UserTask_First_${idx + 1}`;
       const yPos = firstStepYPositions[idx];
       
       flows.push({
-        xml: `  <bpmn:sequenceFlow id="Flow_${callActivityId}_Join" sourceRef="${callActivityId}" targetRef="Gateway_Join"/>`,
-        edge: `    <bpmndi:BPMNEdge id="Edge_${callActivityId}_Join" bpmnElement="Flow_${callActivityId}_Join">
+        xml: `  <bpmn:sequenceFlow id="Flow_${userTaskId}_Join" sourceRef="${userTaskId}" targetRef="Gateway_Join"/>`,
+        edge: `    <bpmndi:BPMNEdge id="Edge_${userTaskId}_Join" bpmnElement="Flow_${userTaskId}_Join">
       <di:waypoint x="${currentX - 100}" y="${yPos + 40}"/>
       <di:waypoint x="${currentX + 25}" y="${yPos + 40}"/>
       <di:waypoint x="${currentX + 25}" y="120"/>
@@ -328,27 +327,23 @@ function generateFallbackMainBPMN(serviceName: string, serviceId: string, steps:
     : (firstSteps.length === 1 ? [...firstSteps, ...otherSteps] : steps);
   
   sequentialSteps.forEach((step: any, idx: number) => {
-    const callActivityId = `CallActivity_${idx + 1}`;
+    const userTaskId = `UserTask_${idx + 1}`;
     
     elements.push({
-      xml: `  <bpmn:callActivity id="${callActivityId}" name="${step.name}">
-    <bpmn:extensionElements>
-      <zeebe:calledElement processId="Process_Sub_${step.step_external_id}" propagateAllChildVariables="false" />
-    </bpmn:extensionElements>
-  </bpmn:callActivity>`,
-      shape: `    <bpmndi:BPMNShape id="Shape_${callActivityId}" bpmnElement="${callActivityId}">
+      xml: `  <bpmn:userTask id="${userTaskId}" name="${step.name}"></bpmn:userTask>`,
+      shape: `    <bpmndi:BPMNShape id="Shape_${userTaskId}" bpmnElement="${userTaskId}">
       <dc:Bounds x="${currentX}" y="80" width="100" height="80"/>
     </bpmndi:BPMNShape>`,
-      id: callActivityId,
+      id: userTaskId,
       xPos: currentX
     });
     
     // Flow from previous element
-    const sourceId = idx === 0 ? (hasMultipleFirstSteps ? 'Gateway_Join' : 'StartEvent_1') : `CallActivity_${idx}`;
+    const sourceId = idx === 0 ? (hasMultipleFirstSteps ? 'Gateway_Join' : 'StartEvent_1') : `UserTask_${idx}`;
     const sourceX = idx === 0 ? (hasMultipleFirstSteps ? currentX - 125 : 188) : currentX - 100;
     
     flows.push({
-      xml: `  <bpmn:sequenceFlow id="Flow_Seq_${idx + 1}" sourceRef="${sourceId}" targetRef="${callActivityId}"/>`,
+      xml: `  <bpmn:sequenceFlow id="Flow_Seq_${idx + 1}" sourceRef="${sourceId}" targetRef="${userTaskId}"/>`,
       edge: `    <bpmndi:BPMNEdge id="Edge_Seq_${idx + 1}" bpmnElement="Flow_Seq_${idx + 1}">
       <di:waypoint x="${sourceX}" y="120"/>
       <di:waypoint x="${currentX}" y="120"/>
@@ -360,7 +355,7 @@ function generateFallbackMainBPMN(serviceName: string, serviceId: string, steps:
   
   // Flow to end event
   const lastElementId = sequentialSteps.length > 0 
-    ? `CallActivity_${sequentialSteps.length}` 
+    ? `UserTask_${sequentialSteps.length}` 
     : (hasMultipleFirstSteps ? 'Gateway_Join' : 'StartEvent_1');
   const lastElementX = currentX - 100;
   

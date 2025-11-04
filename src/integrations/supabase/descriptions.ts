@@ -29,6 +29,8 @@ export async function fetchServiceDescription(serviceKey: string): Promise<strin
     .select("service_description")
     .eq("service_key", serviceKey)
     .is("node_id", null)
+    .order("updated_at", { ascending: false })
+    .limit(1)
     .maybeSingle();
   
   if (error) {

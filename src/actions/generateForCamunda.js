@@ -80,13 +80,30 @@ export async function generateAndUploadBundle({
           console.log(`[resolveDescriptions] No refs found for stepExternalId ${stepExternalId}. Available keys:`, Object.keys(referencesMap));
         }
         
-        // For StartEvents, fetch service-level description
+        // For StartEvents, fetch service-level description with robust fallbacks
         if (isStartEvent) {
           const serviceDesc = await fetchServiceDescription(String(serviceId));
           if (serviceDesc && serviceDesc.trim()) {
-            console.log(`[resolveDescriptions] Found service description for start event: ${serviceDesc}`);
             return { stepDescription: serviceDesc.trim(), references: refs };
           }
+          // Fallback 1: BPMN root process documentation
+          try {
+            const er = modeler.get?.("elementRegistry");
+            const root = er?.getAll?.()?.find?.((e) => (e?.type === 'bpmn:Process' || e?.businessObject?.$type === 'bpmn:Process'));
+            const docs = root?.businessObject?.documentation;
+            if (Array.isArray(docs) && docs.length) {
+              const text = docs.map((d) => (typeof d?.text === 'string' ? d.text : (d?.body || ''))).join('\n').trim();
+              if (text) return { stepDescription: text, references: refs };
+            }
+          } catch (_) { /* ignore */ }
+          // Fallback 2: StartEvent documentation
+          try {
+            const docs = node?.businessObject?.documentation;
+            if (Array.isArray(docs) && docs.length) {
+              const text = docs.map((d) => (typeof d?.text === 'string' ? d.text : (d?.body || ''))).join('\n').trim();
+              if (text) return { stepDescription: text, references: refs };
+            }
+          } catch (_) { /* ignore */ }
         }
         
         // For other nodes, fetch step-specific description

@@ -259,7 +259,7 @@ export function ExportModal({
 
           {isComplete && showResults && type === "export" && (
             <div className="space-y-4">
-              <ScrollArea className="max-h-[60vh]">
+              <ScrollArea className="h-[60vh] w-full">
                 <ExportResultsPanel 
                   serviceId={serviceId}
                   serviceName={serviceName}

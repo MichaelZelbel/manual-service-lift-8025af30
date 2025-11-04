@@ -43,6 +43,8 @@ export async function generateAndUploadBundle({
         const nodeType = node?.type || node?.businessObject?.$type || "";
         const isStartEvent = nodeType === 'bpmn:StartEvent';
         
+        console.log(`[resolveDescriptions] Processing node: id="${nodeId}", name="${nodeName}", type="${nodeType}", isStart=${isStartEvent}`);
+        
         // Extract step_external_id from zeebe:calledElement if it's a CallActivity
         // OR for UserTask, query the manual_service_steps table by service_id + element_id
         let stepExternalId = null;
@@ -69,54 +71,85 @@ export async function generateAndUploadBundle({
           
           if (!stepError && step?.step_external_id) {
             stepExternalId = step.step_external_id;
+            console.log(`[resolveDescriptions] Found step_external_id from DB: ${stepExternalId}`);
           }
         }
         
         // Look up references by step_external_id
         let refs = stepExternalId ? (referencesMap[stepExternalId] || []) : [];
-        
-        console.log(`[resolveDescriptions] Node ID: ${nodeId}, Name: ${nodeName}, IsStart: ${isStartEvent}, StepExtID: ${stepExternalId}, Found ${refs.length} references`);
-        if (refs.length === 0 && stepExternalId) {
-          console.log(`[resolveDescriptions] No refs found for stepExternalId ${stepExternalId}. Available keys:`, Object.keys(referencesMap));
-        }
+        console.log(`[resolveDescriptions] StepExtID: ${stepExternalId}, Found ${refs.length} references`);
         
         // For StartEvents, fetch service-level description with robust fallbacks
         if (isStartEvent) {
+          console.log(`[resolveDescriptions] Start event detected, fetching service description for serviceId=${serviceId}`);
           const serviceDesc = await fetchServiceDescription(String(serviceId));
+          console.log(`[resolveDescriptions] Service description from DB: "${serviceDesc}"`);
+          
           if (serviceDesc && serviceDesc.trim()) {
+            console.log(`[resolveDescriptions] ✓ Using service description from DB`);
             return { stepDescription: serviceDesc.trim(), references: refs };
           }
+          
           // Fallback 1: BPMN root process documentation
+          console.log(`[resolveDescriptions] No DB description, trying BPMN root process documentation...`);
           try {
             const er = modeler.get?.("elementRegistry");
             const root = er?.getAll?.()?.find?.((e) => (e?.type === 'bpmn:Process' || e?.businessObject?.$type === 'bpmn:Process'));
             const docs = root?.businessObject?.documentation;
             if (Array.isArray(docs) && docs.length) {
               const text = docs.map((d) => (typeof d?.text === 'string' ? d.text : (d?.body || ''))).join('\n').trim();
-              if (text) return { stepDescription: text, references: refs };
+              if (text) {
+                console.log(`[resolveDescriptions] ✓ Using BPMN root process documentation: "${text.substring(0, 50)}..."`);
+                return { stepDescription: text, references: refs };
+              }
             }
-          } catch (_) { /* ignore */ }
+          } catch (e) {
+            console.log(`[resolveDescriptions] Error reading root process docs:`, e);
+          }
+          
           // Fallback 2: StartEvent documentation
+          console.log(`[resolveDescriptions] Trying StartEvent documentation...`);
           try {
             const docs = node?.businessObject?.documentation;
             if (Array.isArray(docs) && docs.length) {
               const text = docs.map((d) => (typeof d?.text === 'string' ? d.text : (d?.body || ''))).join('\n').trim();
-              if (text) return { stepDescription: text, references: refs };
+              if (text) {
+                console.log(`[resolveDescriptions] ✓ Using StartEvent documentation: "${text.substring(0, 50)}..."`);
+                return { stepDescription: text, references: refs };
+              }
             }
-          } catch (_) { /* ignore */ }
+          } catch (e) {
+            console.log(`[resolveDescriptions] Error reading StartEvent docs:`, e);
+          }
+          
+          console.log(`[resolveDescriptions] ⚠ No description found for start event, returning empty`);
+          return { stepDescription: "", references: refs };
         }
         
         // For other nodes, fetch step-specific description
+        console.log(`[resolveDescriptions] Non-start node, fetching step description by element_id...`);
         const fromDbById = await fetchStepDescription(String(serviceId), String(nodeId));
-        if (fromDbById && fromDbById.trim()) return { stepDescription: fromDbById.trim(), references: refs };
+        console.log(`[resolveDescriptions] Step description from DB: "${fromDbById}"`);
+        
+        if (fromDbById && fromDbById.trim()) {
+          console.log(`[resolveDescriptions] ✓ Using step description from DB`);
+          return { stepDescription: fromDbById.trim(), references: refs };
+        }
+        
+        console.log(`[resolveDescriptions] Trying node documentation...`);
         const docs = node?.businessObject?.documentation;
         if (Array.isArray(docs) && docs.length) {
           const text = docs
             .map((d) => (typeof d?.text === "string" ? d.text : (d?.body || "")))
             .join("\n")
             .trim();
-          return { stepDescription: text, references: refs };
+          if (text) {
+            console.log(`[resolveDescriptions] ✓ Using node documentation: "${text.substring(0, 50)}..."`);
+            return { stepDescription: text, references: refs };
+          }
         }
+        
+        console.log(`[resolveDescriptions] ⚠ No description found, returning empty`);
         return { stepDescription: "", references: [] };
       } catch (err) {
         console.error('[resolveDescriptions] Error:', err);

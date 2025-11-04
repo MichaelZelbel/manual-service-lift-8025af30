@@ -61,17 +61,21 @@ export async function generateAndUploadBundle({
             }
           }
         } else if (nodeType === 'bpmn:UserTask') {
-          // For UserTask, look up step_external_id from manual_service_steps table
-          const { data: step, error: stepError } = await supabase
-            .from('manual_service_steps')
-            .select('step_external_id')
-            .eq('service_id', serviceId)
-            .eq('element_id', nodeId)
-            .maybeSingle();
-          
-          if (!stepError && step?.step_external_id) {
-            stepExternalId = step.step_external_id;
-            console.log(`[resolveDescriptions] Found step_external_id from DB: ${stepExternalId}`);
+          // For UserTask, match by step_name in mds_data to get step_external_id
+          if (nodeName) {
+            const { data: mdsStep, error: mdsError } = await supabase
+              .from('mds_data')
+              .select('step_external_id')
+              .eq('service_external_id', serviceId)
+              .eq('step_name', nodeName)
+              .maybeSingle();
+            
+            if (!mdsError && mdsStep?.step_external_id) {
+              stepExternalId = mdsStep.step_external_id;
+              console.log(`[resolveDescriptions] Found step_external_id from mds_data by name match: ${stepExternalId}`);
+            } else {
+              console.log(`[resolveDescriptions] No mds_data match for step_name="${nodeName}"`);
+            }
           }
         }
         

@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { CheckCircle2, Download } from "lucide-react";
 import { toast } from "sonner";
 import { ExportResultsPanel } from "./ExportResultsPanel";
@@ -258,10 +259,12 @@ export function ExportModal({
 
           {isComplete && showResults && type === "export" && (
             <div className="space-y-4">
-              <ExportResultsPanel 
-                serviceId={serviceId}
-                serviceName={serviceName}
-              />
+              <ScrollArea className="max-h-[60vh]">
+                <ExportResultsPanel 
+                  serviceId={serviceId}
+                  serviceName={serviceName}
+                />
+              </ScrollArea>
               <div className="flex justify-end gap-3 pt-4">
                 <Button variant="outline" onClick={handleClose}>
                   Close

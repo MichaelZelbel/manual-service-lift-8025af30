@@ -31,6 +31,16 @@ export async function generateAndUploadBundle({
   const referencesMap = await fetchReferencesForService(String(serviceId));
   console.log('[generateForCamunda] References map:', referencesMap);
 
+  // Build service-wide fallback references (deduped by URL)
+  const allServiceRefs = Array.from(
+    new Map(
+      Object.values(referencesMap)
+        .flat()
+        .map((r) => [r.url, r])
+    ).values()
+  );
+  console.log('[generateForCamunda] Service-wide refs prepared:', allServiceRefs.length);
+
   // 2) Generate enriched main BPMN + forms
   const { updatedBpmnXml, forms, manifest } = await generateBundle({
     serviceName,
@@ -80,9 +90,13 @@ export async function generateAndUploadBundle({
         }
         
         // Look up references by step_external_id
-        let refs = stepExternalId ? (referencesMap[stepExternalId] || []) : [];
-        console.log(`[resolveDescriptions] StepExtID: ${stepExternalId}, Found ${refs.length} references`);
-        
+         let refs = stepExternalId ? (referencesMap[stepExternalId] || []) : [];
+         if (!refs.length) {
+           refs = allServiceRefs;
+           console.log(`[resolveDescriptions] No step-specific refs; using service-wide refs (${refs.length})`);
+         } else {
+           console.log(`[resolveDescriptions] StepExtID: ${stepExternalId}, Found ${refs.length} references`);
+         }
         // For StartEvents, fetch service-level description with robust fallbacks
         if (isStartEvent) {
           console.log(`[resolveDescriptions] Start event detected, fetching service description for serviceId=${serviceId}`);

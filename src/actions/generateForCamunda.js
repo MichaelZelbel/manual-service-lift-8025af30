@@ -27,6 +27,9 @@ export async function generateAndUploadBundle({
     ? bpmnModeler
     : await getExportModeler(assertString(manualServiceBpmnXml, 'manualServiceBpmnXml'));
 
+  // 1.1) Fix process and element IDs to match MDS external IDs
+  await fixBpmnIds(modeler, String(serviceId));
+
   // 1.5) Fetch all references for this service
   const referencesMap = await fetchReferencesForService(String(serviceId));
   console.log('[generateForCamunda] References map:', referencesMap);
@@ -176,7 +179,7 @@ export async function generateAndUploadBundle({
     },
   });
 
-  // 3) Fetch subprocess BPMNs from database (unchanged logic)
+  // 3) Fetch subprocess BPMNs from database and fix their IDs
   const { data: subprocesses, error: subError } = await supabase
     .from('subprocesses')
     .select('*')
@@ -186,8 +189,11 @@ export async function generateAndUploadBundle({
 
   const subprocessBpmns = [];
   for (const subprocess of subprocesses || []) {
-    const bpmnXml = subprocess.edited_bpmn_xml || subprocess.original_bpmn_xml;
+    let bpmnXml = subprocess.edited_bpmn_xml || subprocess.original_bpmn_xml;
     if (bpmnXml) {
+      // Fix subprocess process ID to use step_external_id instead of Process_Sub_XXX
+      bpmnXml = await fixSubprocessId(bpmnXml, subprocess.name, serviceId);
+      
       const base = sanitizeFilename(subprocess.name);
       const suffix = (subprocess.id || '').toString().slice(0, 8);
       const unique = suffix ? `${base}-${suffix}` : base;
@@ -252,4 +258,136 @@ function assertString(value, name) {
     throw new Error(`Missing required ${name}: expected non-empty string`);
   }
   return value;
+}
+
+/**
+ * Fixes BPMN IDs to match MDS external IDs:
+ * - Process ID: changes from "Process_Main_123" to "123"
+ * - UserTask IDs: changes from "UserTask_First_1" to step_external_id
+ */
+async function fixBpmnIds(modeler, serviceId) {
+  console.log('[fixBpmnIds] Starting ID fixes for service:', serviceId);
+  
+  const elementRegistry = modeler.get('elementRegistry');
+  const modeling = modeler.get('modeling');
+  const moddle = modeler.get('moddle');
+  
+  // Fix main process ID
+  const allElements = elementRegistry.getAll();
+  const processElement = allElements.find(
+    (el) => el.type === 'bpmn:Process' || el.businessObject?.$type === 'bpmn:Process'
+  );
+  
+  if (processElement) {
+    const oldProcessId = processElement.id;
+    console.log(`[fixBpmnIds] Current process ID: ${oldProcessId}`);
+    
+    // Only fix if it has the old format
+    if (oldProcessId.includes('Process_Main_')) {
+      console.log(`[fixBpmnIds] Changing process ID to: ${serviceId}`);
+      modeling.updateProperties(processElement, { id: serviceId });
+    }
+  }
+  
+  // Fix UserTask IDs: match them to step_external_id from mds_data
+  const userTasks = allElements.filter(
+    (el) => el.type === 'bpmn:UserTask' || el.businessObject?.$type === 'bpmn:UserTask'
+  );
+  
+  console.log(`[fixBpmnIds] Found ${userTasks.length} UserTasks to process`);
+  
+  for (const task of userTasks) {
+    const taskName = task.businessObject?.name || '';
+    const oldTaskId = task.id;
+    
+    console.log(`[fixBpmnIds] Processing task: id="${oldTaskId}", name="${taskName}"`);
+    
+    // Skip if already using numeric ID (likely already fixed)
+    if (/^\d+$/.test(oldTaskId)) {
+      console.log(`[fixBpmnIds] Task ${oldTaskId} already has numeric ID, skipping`);
+      continue;
+    }
+    
+    // Query mds_data to find step_external_id by matching step_name
+    if (taskName) {
+      const { data: mdsStep, error } = await supabase
+        .from('mds_data')
+        .select('step_external_id')
+        .eq('service_external_id', serviceId)
+        .eq('step_name', taskName)
+        .maybeSingle();
+      
+      if (!error && mdsStep?.step_external_id) {
+        console.log(`[fixBpmnIds] Changing task ID from "${oldTaskId}" to "${mdsStep.step_external_id}"`);
+        modeling.updateProperties(task, { id: mdsStep.step_external_id });
+      } else {
+        console.log(`[fixBpmnIds] No mds_data match for task "${taskName}", keeping old ID`);
+      }
+    }
+  }
+  
+  // Fix CallActivity references: update zeebe:calledElement processId
+  const callActivities = allElements.filter(
+    (el) => el.type === 'bpmn:CallActivity' || el.businessObject?.$type === 'bpmn:CallActivity'
+  );
+  
+  console.log(`[fixBpmnIds] Found ${callActivities.length} CallActivities to process`);
+  
+  for (const callActivity of callActivities) {
+    const extensionElements = callActivity.businessObject?.extensionElements;
+    if (extensionElements?.values) {
+      const calledElement = extensionElements.values.find((el) => 
+        el.$type === 'zeebe:CalledElement'
+      );
+      
+      if (calledElement?.processId) {
+        const oldProcessId = calledElement.processId;
+        console.log(`[fixBpmnIds] CallActivity has processId: ${oldProcessId}`);
+        
+        // If it's Process_Sub_XXX, extract XXX
+        const match = oldProcessId.match(/^Process_Sub_(.+)$/);
+        if (match) {
+          const newProcessId = match[1];
+          console.log(`[fixBpmnIds] Updating CallActivity processId to: ${newProcessId}`);
+          calledElement.processId = newProcessId;
+        }
+      }
+    }
+  }
+  
+  console.log('[fixBpmnIds] ID fixes complete');
+}
+
+/**
+ * Fixes subprocess process ID in BPMN XML string to use step_external_id
+ */
+async function fixSubprocessId(bpmnXml, subprocessName, serviceId) {
+  console.log(`[fixSubprocessId] Fixing subprocess ID for: ${subprocessName}`);
+  
+  // Find step_external_id by matching subprocess name to step_name in mds_data
+  const { data: mdsStep, error } = await supabase
+    .from('mds_data')
+    .select('step_external_id')
+    .eq('service_external_id', serviceId)
+    .eq('step_name', subprocessName)
+    .maybeSingle();
+  
+  if (!error && mdsStep?.step_external_id) {
+    const stepId = mdsStep.step_external_id;
+    console.log(`[fixSubprocessId] Found step_external_id: ${stepId}, updating XML`);
+    
+    // Replace Process_Sub_XXX with just the step_external_id
+    const updatedXml = bpmnXml.replace(
+      /<bpmn:process id="Process_Sub_[^"]*"/g,
+      `<bpmn:process id="${stepId}"`
+    ).replace(
+      /bpmnElement="Process_Sub_[^"]*"/g,
+      `bpmnElement="${stepId}"`
+    );
+    
+    return updatedXml;
+  } else {
+    console.log(`[fixSubprocessId] No mds_data match for subprocess "${subprocessName}", keeping original XML`);
+    return bpmnXml;
+  }
 }

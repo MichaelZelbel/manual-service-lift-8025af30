@@ -16,13 +16,19 @@ const FALLBACK_SUBPROCESS_TEMPLATE = (stepName: string, stepId: string) => `<?xm
   xmlns:modeler="http://camunda.org/schema/modeler/1.0"
   id="Defs_Sub_${stepId}" targetNamespace="http://camunda.org/examples">
   <bpmn:process id="${stepId}" name="${stepName}" isExecutable="true">
-    <bpmn:startEvent id="StartEvent_${stepId}" name="Start"/>
+    <bpmn:startEvent id="StartEvent_${stepId}" name="Start">
+      <bpmn:outgoing>Flow_1_${stepId}</bpmn:outgoing>
+    </bpmn:startEvent>
     <bpmn:userTask id="UserTask_${stepId}" name="Process Activities">
+      <bpmn:incoming>Flow_1_${stepId}</bpmn:incoming>
+      <bpmn:outgoing>Flow_2_${stepId}</bpmn:outgoing>
       <bpmn:extensionElements>
         <zeebe:taskDefinition type="user-task" />
       </bpmn:extensionElements>
     </bpmn:userTask>
-    <bpmn:endEvent id="EndEvent_${stepId}" name="End"/>
+    <bpmn:endEvent id="EndEvent_${stepId}" name="End">
+      <bpmn:incoming>Flow_2_${stepId}</bpmn:incoming>
+    </bpmn:endEvent>
     <bpmn:sequenceFlow id="Flow_1_${stepId}" sourceRef="StartEvent_${stepId}" targetRef="UserTask_${stepId}"/>
     <bpmn:sequenceFlow id="Flow_2_${stepId}" sourceRef="UserTask_${stepId}" targetRef="EndEvent_${stepId}"/>
   </bpmn:process>
@@ -59,8 +65,12 @@ const FALLBACK_MAIN_TEMPLATE = (serviceName: string, serviceId: string) => `<?xm
   xmlns:modeler="http://camunda.org/schema/modeler/1.0"
   id="Defs_Main_${serviceId}" targetNamespace="http://camunda.org/examples">
   <bpmn:process id="${serviceId}" name="${serviceName}" isExecutable="true">
-    <bpmn:startEvent id="StartEvent_1" name="Start"/>
+    <bpmn:startEvent id="StartEvent_1" name="Start">
+      <bpmn:outgoing>Flow_1</bpmn:outgoing>
+    </bpmn:startEvent>
     <bpmn:userTask id="UserTask_1" name="Process Activities">
+      <bpmn:incoming>Flow_1</bpmn:incoming>
+      <bpmn:outgoing>Flow_2</bpmn:outgoing>
       <bpmn:extensionElements>
         <zeebe:taskDefinition type="user-task" />
         <zeebe:taskHeaders>
@@ -68,7 +78,9 @@ const FALLBACK_MAIN_TEMPLATE = (serviceName: string, serviceId: string) => `<?xm
         </zeebe:taskHeaders>
       </bpmn:extensionElements>
     </bpmn:userTask>
-    <bpmn:endEvent id="EndEvent_1" name="End"/>
+    <bpmn:endEvent id="EndEvent_1" name="End">
+      <bpmn:incoming>Flow_2</bpmn:incoming>
+    </bpmn:endEvent>
     <bpmn:sequenceFlow id="Flow_1" sourceRef="StartEvent_1" targetRef="UserTask_1"/>
     <bpmn:sequenceFlow id="Flow_2" sourceRef="UserTask_1" targetRef="EndEvent_1"/>
   </bpmn:process>
@@ -625,7 +637,7 @@ Candidate Group: ${step.candidate_group || 'None'}
 ${pdfInfo}
 
 Instructions:
-- Use process id="Process_Sub_${step.step_external_id}" name="${step.name}" isExecutable="true"
+- Use process id="${step.step_external_id}" name="${step.name}" isExecutable="true"
 - Default to bpmn:userTask unless the text clearly implies automation (then bpmn:serviceTask)
 - If candidate_group is present, add Camunda 8 task assignment using zeebe:taskHeaders:
   <bpmn:extensionElements>
@@ -708,7 +720,7 @@ The first step (marked [FIRST STEP]) must connect directly from the start event.
 All other steps follow sequentially.`}
 
 Instructions:
-- Use process id="Process_Main_${service_external_id}" name="${serviceData.name}" isExecutable="true"
+- Use process id="${service_external_id}" name="${serviceData.name}" isExecutable="true"
 - For each step, create a bpmn:userTask:
   <bpmn:userTask id="UserTask_[index]" name="[step name]"></bpmn:userTask>
 - If branching is implied by step names or multiple first steps exist, add appropriate gateways (inclusiveGateway for multiple first steps)

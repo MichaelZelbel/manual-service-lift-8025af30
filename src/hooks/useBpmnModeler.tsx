@@ -52,6 +52,63 @@ export function useBpmnModeler({ entityId, entityType, onAutoSave }: UseBpmnMode
     return { valid: true };
   };
 
+  // Sanitize invalid XML IDs (numeric-only to prefixed format)
+  const sanitizeInvalidIds = (xml: string): { sanitized: string; changed: boolean; count: number } => {
+    const idMapping = new Map<string, string>();
+    let changed = false;
+
+    // Find all id="..." in bpmn: elements that start with a digit or are purely numeric
+    const idMatches = xml.matchAll(/<bpmn:[^>]+\sid="([^"]+)"/g);
+    
+    for (const match of idMatches) {
+      const id = match[1];
+      // Check if ID starts with digit (invalid in XML NCName)
+      if (/^[0-9]/.test(id)) {
+        // Determine if this is a process element (main service) or other element
+        const elementMatch = match[0].match(/<bpmn:(\w+)/);
+        const elementType = elementMatch ? elementMatch[1] : null;
+        
+        let newId: string;
+        if (elementType === 'process') {
+          // Main process: use Manual_Service_ prefix
+          newId = `Manual_Service_${id}`;
+        } else {
+          // User tasks, call activities, etc: use Process_Step_ prefix
+          newId = `Process_Step_${id}`;
+        }
+        
+        idMapping.set(id, newId);
+        changed = true;
+      }
+    }
+
+    if (!changed) {
+      return { sanitized: xml, changed: false, count: 0 };
+    }
+
+    console.log(`[sanitizeInvalidIds] Found ${idMapping.size} invalid IDs to fix:`, Object.fromEntries(idMapping));
+
+    let sanitized = xml;
+    
+    // Replace all references to these IDs
+    const attributes = [
+      'id', 'sourceRef', 'targetRef', 'default', 'bpmnElement', 
+      'calledElement', 'processRef', 'itemSubjectRef', 'messageRef', 
+      'errorRef', 'signalRef', 'processId'
+    ];
+    
+    for (const [oldId, newId] of idMapping.entries()) {
+      for (const attr of attributes) {
+        // Match attribute="oldId" with proper escaping
+        const regex = new RegExp(`(${attr}=")${oldId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(")`,'g');
+        sanitized = sanitized.replace(regex, `$1${newId}$2`);
+      }
+    }
+
+    console.log(`[sanitizeInvalidIds] Sanitized ${idMapping.size} IDs`);
+    return { sanitized, changed: true, count: idMapping.size };
+  };
+
   // Helper to clean HTML-wrapped XML
   const cleanXml = (xml: string): string => {
     // Check if XML is wrapped in HTML tags (corrupted data)
@@ -105,7 +162,35 @@ export function useBpmnModeler({ entityId, entityType, onAutoSave }: UseBpmnMode
       }
 
       suppressSaveRef.current = true;
-      const cleanedXml = cleanXml(xml);
+      let cleanedXml = cleanXml(xml);
+
+      // Sanitize invalid IDs before validation
+      const { sanitized, changed, count } = sanitizeInvalidIds(cleanedXml);
+      cleanedXml = sanitized;
+      
+      if (changed) {
+        console.log(`✓ Auto-fixed ${count} invalid XML IDs`);
+        toast.info(`Auto-fixed ${count} invalid ID${count > 1 ? 's' : ''} to meet XML standards`);
+        
+        // Save the sanitized XML back to database
+        if (options?.entityId && options?.entityType) {
+          try {
+            const table = options.entityType === 'service' ? 'manual_services' : 'subprocesses';
+            const { error: saveError } = await supabase
+              .from(table)
+              .update({ edited_bpmn_xml: cleanedXml })
+              .eq('id', options.entityId);
+            
+            if (saveError) {
+              console.error('Failed to save sanitized XML:', saveError);
+            } else {
+              console.log('✓ Saved sanitized XML to database');
+            }
+          } catch (e) {
+            console.error('Error saving sanitized XML:', e);
+          }
+        }
+      }
 
       // Validate XML structure
       const validation = validateBpmnXml(cleanedXml);

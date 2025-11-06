@@ -280,12 +280,13 @@ async function fixBpmnIds(modeler, serviceId) {
   
   if (processElement) {
     const oldProcessId = processElement.id;
+    const newProcessId = `Manual_Service_${serviceId}`;
     console.log(`[fixBpmnIds] Current process ID: ${oldProcessId}`);
     
-    // Only fix if it has the old format
-    if (oldProcessId.includes('Process_Main_')) {
-      console.log(`[fixBpmnIds] Changing process ID to: ${serviceId}`);
-      modeling.updateProperties(processElement, { id: serviceId });
+    // Only fix if it doesn't already have the Manual_Service_ prefix
+    if (!oldProcessId.startsWith('Manual_Service_')) {
+      console.log(`[fixBpmnIds] Changing process ID to: ${newProcessId}`);
+      modeling.updateProperties(processElement, { id: newProcessId });
     }
   }
   
@@ -302,9 +303,9 @@ async function fixBpmnIds(modeler, serviceId) {
     
     console.log(`[fixBpmnIds] Processing task: id="${oldTaskId}", name="${taskName}"`);
     
-    // Skip if already using numeric ID (likely already fixed)
-    if (/^\d+$/.test(oldTaskId)) {
-      console.log(`[fixBpmnIds] Task ${oldTaskId} already has numeric ID, skipping`);
+    // Skip if already using Process_Step_ prefix
+    if (oldTaskId.startsWith('Process_Step_')) {
+      console.log(`[fixBpmnIds] Task ${oldTaskId} already has Process_Step_ prefix, skipping`);
       continue;
     }
     
@@ -318,8 +319,9 @@ async function fixBpmnIds(modeler, serviceId) {
         .maybeSingle();
       
       if (!error && mdsStep?.step_external_id) {
-        console.log(`[fixBpmnIds] Changing task ID from "${oldTaskId}" to "${mdsStep.step_external_id}"`);
-        modeling.updateProperties(task, { id: mdsStep.step_external_id });
+        const newTaskId = `Process_Step_${mdsStep.step_external_id}`;
+        console.log(`[fixBpmnIds] Changing task ID from "${oldTaskId}" to "${newTaskId}"`);
+        modeling.updateProperties(task, { id: newTaskId });
       } else {
         console.log(`[fixBpmnIds] No mds_data match for task "${taskName}", keeping old ID`);
       }
@@ -344,10 +346,13 @@ async function fixBpmnIds(modeler, serviceId) {
         const oldProcessId = calledElement.processId;
         console.log(`[fixBpmnIds] CallActivity has processId: ${oldProcessId}`);
         
-        // If it's Process_Sub_XXX, extract XXX
-        const match = oldProcessId.match(/^Process_Sub_(.+)$/);
-        if (match) {
-          const newProcessId = match[1];
+        // Skip if already using Process_Step_ prefix
+        if (oldProcessId.startsWith('Process_Step_')) {
+          console.log(`[fixBpmnIds] CallActivity already has Process_Step_ prefix, skipping`);
+        } else if (oldProcessId.match(/^Process_Sub_(.+)$/)) {
+          // If it's Process_Sub_XXX, extract XXX and add Process_Step_ prefix
+          const match = oldProcessId.match(/^Process_Sub_(.+)$/);
+          const newProcessId = `Process_Step_${match[1]}`;
           console.log(`[fixBpmnIds] Updating CallActivity processId to: ${newProcessId}`);
           calledElement.processId = newProcessId;
         }
@@ -373,15 +378,24 @@ async function fixSubprocessId(bpmnXml, subprocessName, serviceId) {
     .maybeSingle();
   
   if (!error && mdsStep?.step_external_id) {
-    const stepId = mdsStep.step_external_id;
+    const stepId = `Process_Step_${mdsStep.step_external_id}`;
     console.log(`[fixSubprocessId] Found step_external_id: ${stepId}, updating XML`);
     
-    // Replace Process_Sub_XXX with just the step_external_id
-    const updatedXml = bpmnXml.replace(
+    // Replace Process_Sub_XXX or numeric IDs with Process_Step_XXX
+    let updatedXml = bpmnXml.replace(
       /<bpmn:process id="Process_Sub_[^"]*"/g,
       `<bpmn:process id="${stepId}"`
     ).replace(
       /bpmnElement="Process_Sub_[^"]*"/g,
+      `bpmnElement="${stepId}"`
+    );
+    
+    // Also handle purely numeric process IDs
+    updatedXml = updatedXml.replace(
+      /<bpmn:process id="\d+"/g,
+      `<bpmn:process id="${stepId}"`
+    ).replace(
+      /bpmnElement="\d+"/g,
       `bpmnElement="${stepId}"`
     );
     

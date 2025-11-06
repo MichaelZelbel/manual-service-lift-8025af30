@@ -15,7 +15,7 @@ const FALLBACK_SUBPROCESS_TEMPLATE = (stepName: string, stepId: string) => `<?xm
   xmlns:zeebe="http://camunda.org/schema/zeebe/1.0"
   xmlns:modeler="http://camunda.org/schema/modeler/1.0"
   id="Defs_Sub_${stepId}" targetNamespace="http://camunda.org/examples">
-  <bpmn:process id="Process_Step_${stepId}" name="${stepName}" isExecutable="true">
+  <bpmn:process id="Process_Step_ID_${stepId}" name="${stepName}" isExecutable="true">
     <bpmn:startEvent id="StartEvent_${stepId}" name="Start">
       <bpmn:outgoing>Flow_1_${stepId}</bpmn:outgoing>
     </bpmn:startEvent>
@@ -33,7 +33,7 @@ const FALLBACK_SUBPROCESS_TEMPLATE = (stepName: string, stepId: string) => `<?xm
     <bpmn:sequenceFlow id="Flow_2_${stepId}" sourceRef="UserTask_${stepId}" targetRef="EndEvent_${stepId}"/>
   </bpmn:process>
   <bpmndi:BPMNDiagram id="BPMNDiagram_${stepId}">
-    <bpmndi:BPMNPlane id="BPMNPlane_${stepId}" bpmnElement="Process_Step_${stepId}">
+    <bpmndi:BPMNPlane id="BPMNPlane_${stepId}" bpmnElement="Process_Step_ID_${stepId}">
       <bpmndi:BPMNShape id="Shape_Start_${stepId}" bpmnElement="StartEvent_${stepId}">
         <dc:Bounds x="152" y="102" width="36" height="36"/>
       </bpmndi:BPMNShape>
@@ -64,7 +64,7 @@ const FALLBACK_MAIN_TEMPLATE = (serviceName: string, serviceId: string) => `<?xm
   xmlns:zeebe="http://camunda.org/schema/zeebe/1.0"
   xmlns:modeler="http://camunda.org/schema/modeler/1.0"
   id="Defs_Main_${serviceId}" targetNamespace="http://camunda.org/examples">
-  <bpmn:process id="Manual_Service_${serviceId}" name="${serviceName}" isExecutable="true">
+  <bpmn:process id="Manual_Service_ID_${serviceId}" name="${serviceName}" isExecutable="true">
     <bpmn:startEvent id="StartEvent_1" name="Start">
       <bpmn:outgoing>Flow_1</bpmn:outgoing>
     </bpmn:startEvent>
@@ -85,7 +85,7 @@ const FALLBACK_MAIN_TEMPLATE = (serviceName: string, serviceId: string) => `<?xm
     <bpmn:sequenceFlow id="Flow_2" sourceRef="UserTask_1" targetRef="EndEvent_1"/>
   </bpmn:process>
   <bpmndi:BPMNDiagram id="BPMNDiagram_${serviceId}">
-    <bpmndi:BPMNPlane id="BPMNPlane_${serviceId}" bpmnElement="Manual_Service_${serviceId}">
+    <bpmndi:BPMNPlane id="BPMNPlane_${serviceId}" bpmnElement="Manual_Service_ID_${serviceId}">
       <bpmndi:BPMNShape id="Shape_Start_${serviceId}" bpmnElement="StartEvent_1">
         <dc:Bounds x="152" y="102" width="36" height="36"/>
       </bpmndi:BPMNShape>
@@ -280,7 +280,7 @@ function generateFallbackMainBPMN(serviceName: string, serviceId: string, steps:
     
     firstSteps.forEach((step: any, idx: number) => {
       const yPos = firstStepYPositions[idx];
-      const userTaskId = step.step_external_id ? `Process_Step_${step.step_external_id}` : `UserTask_First_${idx + 1}`;
+      const userTaskId = step.step_external_id ? `Process_Step_ID_${step.step_external_id}` : `UserTask_First_${idx + 1}`;
       
       elements.push({
         xml: `  <bpmn:userTask id="${userTaskId}" name="${step.name}">
@@ -317,13 +317,13 @@ function generateFallbackMainBPMN(serviceName: string, serviceId: string, steps:
     </bpmndi:BPMNShape>`,
       id: 'Gateway_Join',
       xPos: currentX,
-      incoming: firstSteps.map((step, idx) => `Flow_${step.step_external_id ? `Process_Step_${step.step_external_id}` : `UserTask_First_${idx + 1}`}_Join`),
+      incoming: firstSteps.map((step, idx) => `Flow_${step.step_external_id ? `Process_Step_ID_${step.step_external_id}` : `UserTask_First_${idx + 1}`}_Join`),
       outgoing: otherSteps.length > 0 ? [`Flow_Seq_1`] : ['Flow_To_End']
     });
     
     // Flows from first steps to join gateway
     firstSteps.forEach((step: any, idx: number) => {
-      const userTaskId = step.step_external_id ? `Process_Step_${step.step_external_id}` : `UserTask_First_${idx + 1}`;
+      const userTaskId = step.step_external_id ? `Process_Step_ID_${step.step_external_id}` : `UserTask_First_${idx + 1}`;
       const yPos = firstStepYPositions[idx];
       
       flows.push({
@@ -348,7 +348,7 @@ function generateFallbackMainBPMN(serviceName: string, serviceId: string, steps:
     : (firstSteps.length === 1 ? [...firstSteps, ...otherSteps] : steps);
   
   sequentialSteps.forEach((step: any, idx: number) => {
-    const userTaskId = step.step_external_id ? `Process_Step_${step.step_external_id}` : `UserTask_${idx + 1}`;
+    const userTaskId = step.step_external_id ? `Process_Step_ID_${step.step_external_id}` : `UserTask_${idx + 1}`;
     const incomingFlowId = `Flow_Seq_${idx + 1}`;
     const outgoingFlowId = idx < sequentialSteps.length - 1 ? `Flow_Seq_${idx + 2}` : 'Flow_To_End';
     
@@ -367,7 +367,7 @@ function generateFallbackMainBPMN(serviceName: string, serviceId: string, steps:
     });
     
     // Flow from previous element
-    const sourceId = idx === 0 ? (hasMultipleFirstSteps ? 'Gateway_Join' : 'StartEvent_1') : (sequentialSteps[idx - 1]?.step_external_id ? `Process_Step_${sequentialSteps[idx - 1].step_external_id}` : `UserTask_${idx}`);
+    const sourceId = idx === 0 ? (hasMultipleFirstSteps ? 'Gateway_Join' : 'StartEvent_1') : (sequentialSteps[idx - 1]?.step_external_id ? `Process_Step_ID_${sequentialSteps[idx - 1].step_external_id}` : `UserTask_${idx}`);
     const sourceX = idx === 0 ? (hasMultipleFirstSteps ? currentX - 125 : 188) : currentX - 100;
     
     flows.push({
@@ -383,7 +383,7 @@ function generateFallbackMainBPMN(serviceName: string, serviceId: string, steps:
   
   // Flow to end event
   const lastElementId = sequentialSteps.length > 0 
-    ? (sequentialSteps[sequentialSteps.length - 1]?.step_external_id ? `Process_Step_${sequentialSteps[sequentialSteps.length - 1].step_external_id}` : `UserTask_${sequentialSteps.length}`)
+    ? (sequentialSteps[sequentialSteps.length - 1]?.step_external_id ? `Process_Step_ID_${sequentialSteps[sequentialSteps.length - 1].step_external_id}` : `UserTask_${sequentialSteps.length}`)
     : (hasMultipleFirstSteps ? 'Gateway_Join' : 'StartEvent_1');
   const lastElementX = currentX - 100;
   

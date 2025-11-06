@@ -3,6 +3,7 @@ import BpmnModeler from "bpmn-js/lib/Modeler";
 // @ts-ignore
 import zeebeModdle from "zeebe-bpmn-moddle/resources/zeebe.json";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 interface UseBpmnModelerOptions {
   entityId: string;
@@ -21,6 +22,24 @@ export function useBpmnModeler({ entityId, entityType, onAutoSave }: UseBpmnMode
   const tabIdRef = useRef(`tab_${Math.random().toString(36).substring(7)}`);
 
   const tableName = entityType === "service" ? "manual_services" : "subprocesses";
+
+  // Helper to save sanitized XML to database
+  const saveSanitizedXml = useCallback(async (xml: string) => {
+    try {
+      const { error: saveError } = await supabase
+        .from(tableName)
+        .update({ edited_bpmn_xml: xml })
+        .eq('id', entityId);
+      
+      if (saveError) {
+        console.error('Failed to save sanitized XML:', saveError);
+      } else {
+        console.log('✓ Saved sanitized XML to database');
+      }
+    } catch (e) {
+      console.error('Error saving sanitized XML:', e);
+    }
+  }, [entityId, tableName]);
 
   // Initialize modeler once
   useEffect(() => {
@@ -70,11 +89,11 @@ export function useBpmnModeler({ entityId, entityType, onAutoSave }: UseBpmnMode
         
         let newId: string;
         if (elementType === 'process') {
-          // Main process: use Manual_Service_ prefix
-          newId = `Manual_Service_${id}`;
+          // Main process: use Manual_Service_ID_ prefix
+          newId = `Manual_Service_ID_${id}`;
         } else {
-          // User tasks, call activities, etc: use Process_Step_ prefix
-          newId = `Process_Step_${id}`;
+          // User tasks, call activities, etc: use Process_Step_ID_ prefix
+          newId = `Process_Step_ID_${id}`;
         }
         
         idMapping.set(id, newId);
@@ -173,23 +192,7 @@ export function useBpmnModeler({ entityId, entityType, onAutoSave }: UseBpmnMode
         toast.info(`Auto-fixed ${count} invalid ID${count > 1 ? 's' : ''} to meet XML standards`);
         
         // Save the sanitized XML back to database
-        if (options?.entityId && options?.entityType) {
-          try {
-            const table = options.entityType === 'service' ? 'manual_services' : 'subprocesses';
-            const { error: saveError } = await supabase
-              .from(table)
-              .update({ edited_bpmn_xml: cleanedXml })
-              .eq('id', options.entityId);
-            
-            if (saveError) {
-              console.error('Failed to save sanitized XML:', saveError);
-            } else {
-              console.log('✓ Saved sanitized XML to database');
-            }
-          } catch (e) {
-            console.error('Error saving sanitized XML:', e);
-          }
-        }
+        await saveSanitizedXml(cleanedXml);
       }
 
       // Validate XML structure

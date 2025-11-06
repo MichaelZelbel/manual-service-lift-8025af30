@@ -280,11 +280,11 @@ async function fixBpmnIds(modeler, serviceId) {
   
   if (processElement) {
     const oldProcessId = processElement.id;
-    const newProcessId = `Manual_Service_${serviceId}`;
+    const newProcessId = `Manual_Service_ID_${serviceId}`;
     console.log(`[fixBpmnIds] Current process ID: ${oldProcessId}`);
     
-    // Only fix if it doesn't already have the Manual_Service_ prefix
-    if (!oldProcessId.startsWith('Manual_Service_')) {
+    // Only fix if it doesn't already have the Manual_Service_ID_ prefix
+    if (!oldProcessId.startsWith('Manual_Service_ID_')) {
       console.log(`[fixBpmnIds] Changing process ID to: ${newProcessId}`);
       modeling.updateProperties(processElement, { id: newProcessId });
     }
@@ -303,9 +303,9 @@ async function fixBpmnIds(modeler, serviceId) {
     
     console.log(`[fixBpmnIds] Processing task: id="${oldTaskId}", name="${taskName}"`);
     
-    // Skip if already using Process_Step_ prefix
-    if (oldTaskId.startsWith('Process_Step_')) {
-      console.log(`[fixBpmnIds] Task ${oldTaskId} already has Process_Step_ prefix, skipping`);
+    // Skip if already using Process_Step_ID_ prefix
+    if (oldTaskId.startsWith('Process_Step_ID_')) {
+      console.log(`[fixBpmnIds] Task ${oldTaskId} already has Process_Step_ID_ prefix, skipping`);
       continue;
     }
     
@@ -319,7 +319,7 @@ async function fixBpmnIds(modeler, serviceId) {
         .maybeSingle();
       
       if (!error && mdsStep?.step_external_id) {
-        const newTaskId = `Process_Step_${mdsStep.step_external_id}`;
+        const newTaskId = `Process_Step_ID_${mdsStep.step_external_id}`;
         console.log(`[fixBpmnIds] Changing task ID from "${oldTaskId}" to "${newTaskId}"`);
         modeling.updateProperties(task, { id: newTaskId });
       } else {
@@ -346,13 +346,13 @@ async function fixBpmnIds(modeler, serviceId) {
         const oldProcessId = calledElement.processId;
         console.log(`[fixBpmnIds] CallActivity has processId: ${oldProcessId}`);
         
-        // Skip if already using Process_Step_ prefix
-        if (oldProcessId.startsWith('Process_Step_')) {
-          console.log(`[fixBpmnIds] CallActivity already has Process_Step_ prefix, skipping`);
+        // Skip if already using Process_Step_ID_ prefix
+        if (oldProcessId.startsWith('Process_Step_ID_')) {
+          console.log(`[fixBpmnIds] CallActivity already has Process_Step_ID_ prefix, skipping`);
         } else if (oldProcessId.match(/^Process_Sub_(.+)$/)) {
-          // If it's Process_Sub_XXX, extract XXX and add Process_Step_ prefix
+          // If it's Process_Sub_XXX, extract XXX and add Process_Step_ID_ prefix
           const match = oldProcessId.match(/^Process_Sub_(.+)$/);
-          const newProcessId = `Process_Step_${match[1]}`;
+          const newProcessId = `Process_Step_ID_${match[1]}`;
           console.log(`[fixBpmnIds] Updating CallActivity processId to: ${newProcessId}`);
           calledElement.processId = newProcessId;
         }
@@ -378,10 +378,10 @@ async function fixSubprocessId(bpmnXml, subprocessName, serviceId) {
     .maybeSingle();
   
   if (!error && mdsStep?.step_external_id) {
-    const stepId = `Process_Step_${mdsStep.step_external_id}`;
+    const stepId = `Process_Step_ID_${mdsStep.step_external_id}`;
     console.log(`[fixSubprocessId] Found step_external_id: ${stepId}, updating XML`);
     
-    // Replace Process_Sub_XXX or numeric IDs with Process_Step_XXX
+    // Replace Process_Sub_XXX or numeric IDs with Process_Step_ID_XXX
     let updatedXml = bpmnXml.replace(
       /<bpmn:process id="Process_Sub_[^"]*"/g,
       `<bpmn:process id="${stepId}"`

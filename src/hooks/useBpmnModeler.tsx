@@ -43,6 +43,15 @@ export function useBpmnModeler({ entityId, entityType, onAutoSave }: UseBpmnMode
     };
   }, []);
 
+  // Validate BPMN XML structure
+  const validateBpmnXml = (xml: string): { valid: boolean; error?: string } => {
+    if (!xml.includes('<bpmn:definitions')) return { valid: false, error: 'Missing <bpmn:definitions>' };
+    if (!xml.includes('<bpmn:process')) return { valid: false, error: 'Missing <bpmn:process>' };
+    if (!xml.includes('</bpmn:definitions>')) return { valid: false, error: 'Unclosed <bpmn:definitions>' };
+    if (!xml.includes('</bpmn:process>')) return { valid: false, error: 'Unclosed <bpmn:process>' };
+    return { valid: true };
+  };
+
   // Helper to clean HTML-wrapped XML
   const cleanXml = (xml: string): string => {
     // Check if XML is wrapped in HTML tags (corrupted data)
@@ -76,32 +85,85 @@ export function useBpmnModeler({ entityId, entityType, onAutoSave }: UseBpmnMode
     );
   };
 
-  // Load XML from database
-  const loadXml = useCallback(
-    async (xml: string) => {
-      if (!modeler) return;
+  // Load XML with retry logic and comprehensive error logging
+  const loadXmlWithRetry = useCallback(
+    async (xml: string, retries = 3) => {
+      if (!modeler) {
+        console.error("❌ Modeler not initialized");
+        return;
+      }
+
+      // Validate modeler is ready
       try {
-        suppressSaveRef.current = true;
-        const cleanedXml = cleanXml(xml);
-        await modeler.importXML(cleanedXml);
+        const canvas = modeler.get("canvas");
+        if (!canvas) {
+          console.warn("⚠️ Canvas not ready, waiting...");
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+      } catch (e) {
+        console.error("❌ Modeler not fully initialized:", e);
+      }
+
+      suppressSaveRef.current = true;
+      const cleanedXml = cleanXml(xml);
+
+      // Validate XML structure
+      const validation = validateBpmnXml(cleanedXml);
+      if (!validation.valid) {
+        console.error("❌ Invalid BPMN XML:", validation.error);
+        toast.error(`Invalid BPMN: ${validation.error}`);
+        await modeler.createDiagram();
         suppressSaveRef.current = false;
-        setError(null);
-      } catch (err: any) {
-        console.error("Error importing XML:", err);
-        console.error("Error details:", err.message);
-        console.error("Error warnings:", err.warnings);
+        return;
+      }
+
+      // Retry logic
+      for (let attempt = 1; attempt <= retries; attempt++) {
         try {
-          await modeler.createDiagram();
+          console.log(`🔄 Import attempt ${attempt}/${retries}...`);
+          await modeler.importXML(cleanedXml);
+          console.log("✅ XML imported successfully");
           suppressSaveRef.current = false;
           setError(null);
-          toast.error(`Import failed: ${err.message || 'Unknown error'}. Created blank canvas.`);
-        } catch (e2) {
-          setError("Failed to load BPMN diagram");
-          toast.error("Failed to load BPMN diagram");
+          return;
+        } catch (err: any) {
+          console.error(`❌ Import attempt ${attempt} failed:`, err);
+          console.error("Error message:", err.message);
+          console.error("Error warnings:", err.warnings);
+          console.error("XML length:", cleanedXml.length);
+          console.error("XML preview:", cleanedXml.substring(0, 300));
+          console.error("Has <bpmn:process>:", cleanedXml.includes('<bpmn:process'));
+          console.error("Has <bpmn:definitions>:", cleanedXml.includes('<bpmn:definitions'));
+
+          if (attempt < retries) {
+            console.warn(`⏳ Retrying in ${200 * attempt}ms...`);
+            await new Promise(resolve => setTimeout(resolve, 200 * attempt));
+          } else {
+            // Last attempt failed, create blank diagram
+            console.error("❌ All import attempts failed, creating blank diagram");
+            try {
+              await modeler.createDiagram();
+              suppressSaveRef.current = false;
+              setError(null);
+              toast.error(`Import failed: ${err.message || 'no process or collaboration to display'}. Created blank canvas.`);
+            } catch (e2) {
+              console.error("❌ Failed to create blank diagram:", e2);
+              setError("Failed to load BPMN diagram");
+              toast.error("Failed to load BPMN diagram");
+            }
+          }
         }
       }
     },
     [modeler]
+  );
+
+  // Wrapper for backwards compatibility
+  const loadXml = useCallback(
+    async (xml: string) => {
+      await loadXmlWithRetry(xml, 3);
+    },
+    [loadXmlWithRetry]
   );
 
   // Save XML to string

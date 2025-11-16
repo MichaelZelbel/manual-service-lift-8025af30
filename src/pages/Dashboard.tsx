@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 import { ExportModal } from "@/components/ExportModal";
+import { TransferToCamundaModal } from "@/components/TransferToCamundaModal";
 import { useUserRole } from "@/hooks/useUserRole";
 import { Settings, Upload, Trash2, FileBox } from "lucide-react";
 import BpmnModeler from "bpmn-js/lib/Modeler";
@@ -36,6 +37,8 @@ interface ManualService {
   last_bpmn_export: string | null;
   last_form_export: string | null;
   last_analysis: string | null;
+  edited_bpmn_xml: string | null;
+  original_bpmn_xml: string | null;
 }
 
 const Dashboard = () => {
@@ -45,6 +48,7 @@ const Dashboard = () => {
   const [filterText, setFilterText] = useState("");
   const [loading, setLoading] = useState(true);
   const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [transferModalOpen, setTransferModalOpen] = useState(false);
   const [exportModalType, setExportModalType] = useState<"export" | "analysis">("export");
   const [selectedService, setSelectedService] = useState<ManualService | null>(null);
   const [bpmnModeler, setBpmnModeler] = useState<any>(null);
@@ -167,6 +171,43 @@ const Dashboard = () => {
     setSelectedService(service);
     setExportModalType("analysis");
     setExportModalOpen(true);
+  };
+
+  const handleTransfer = async (service: ManualService) => {
+    setSelectedService(service);
+    setModelerLoading(true);
+
+    try {
+      if (!bpmnModeler && hiddenModelerRef.current) {
+        const modeler = new BpmnModeler({
+          container: hiddenModelerRef.current,
+          keyboard: { bindTo: document },
+          additionalModules: [],
+          moddleExtensions: {
+            zeebe: zeebeModdle,
+          },
+        });
+
+        setBpmnModeler(modeler);
+
+        const xml = service.edited_bpmn_xml || service.original_bpmn_xml;
+        if (!xml) throw new Error("No BPMN XML found for this service");
+
+        await modeler.importXML(xml);
+      } else if (bpmnModeler) {
+        const xml = service.edited_bpmn_xml || service.original_bpmn_xml;
+        if (!xml) throw new Error("No BPMN XML found for this service");
+
+        await bpmnModeler.importXML(xml);
+      }
+
+      setTransferModalOpen(true);
+    } catch (error) {
+      console.error("Error loading BPMN:", error);
+      toast.error("Failed to load BPMN model");
+    } finally {
+      setModelerLoading(false);
+    }
   };
 
   const formatDate = (dateString: string | null) => {
@@ -312,6 +353,16 @@ const Dashboard = () => {
                       {modelerLoading ? "Loading..." : "Download for Camunda"}
                     </Button>
                     <Button
+                      onClick={() => handleTransfer(service)}
+                      variant="default"
+                      className="w-full gap-2"
+                      size="sm"
+                      disabled={modelerLoading}
+                    >
+                      <Upload className="h-4 w-4" />
+                      Transfer to Camunda
+                    </Button>
+                    <Button
                       onClick={() => handleAnalysis(service)}
                       variant="secondary"
                       className="w-full"
@@ -340,20 +391,35 @@ const Dashboard = () => {
 
       {/* Export Modal */}
       {selectedService && (
-        <ExportModal
-          open={exportModalOpen}
-          onOpenChange={(open) => {
-            setExportModalOpen(open);
-            if (!open) {
-              // Refresh services after modal closes to show updated timestamps
-              fetchServices();
-            }
-          }}
-          type={exportModalType}
-          serviceId={selectedService.id}
-          serviceName={selectedService.name}
-          bpmnModeler={bpmnModeler}
-        />
+        <>
+          <ExportModal
+            open={exportModalOpen}
+            onOpenChange={(open) => {
+              setExportModalOpen(open);
+              if (!open) {
+                // Refresh services after modal closes to show updated timestamps
+                fetchServices();
+              }
+            }}
+            type={exportModalType}
+            serviceId={selectedService.id}
+            serviceName={selectedService.name}
+            bpmnModeler={bpmnModeler}
+          />
+
+          <TransferToCamundaModal
+            open={transferModalOpen}
+            onOpenChange={(open) => {
+              setTransferModalOpen(open);
+              if (!open) {
+                fetchServices();
+              }
+            }}
+            serviceId={selectedService.id}
+            serviceName={selectedService.name}
+            bpmnModeler={bpmnModeler}
+          />
+        </>
       )}
     </div>
   );

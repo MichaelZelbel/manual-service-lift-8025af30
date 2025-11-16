@@ -35,3 +35,6 @@ verify_jwt = false
 
 [functions.describe-steps]
 verify_jwt = false
+
+[functions.transfer-to-camunda]
+verify_jwt = false

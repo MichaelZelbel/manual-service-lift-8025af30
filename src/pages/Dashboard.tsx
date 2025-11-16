@@ -354,13 +354,13 @@ const Dashboard = () => {
                     </Button>
                     <Button
                       onClick={() => handleTransfer(service)}
-                      variant="default"
+                      variant="outline"
                       className="w-full gap-2"
                       size="sm"
                       disabled={modelerLoading}
                     >
                       <Upload className="h-4 w-4" />
-                      Transfer to Camunda
+                      Camunda
                     </Button>
                     <Button
                       onClick={() => handleAnalysis(service)}

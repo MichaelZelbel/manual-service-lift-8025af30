@@ -251,6 +251,13 @@ Deno.serve(async (req) => {
     const maxRetries = 3;
 
     for (const file of filesToUpload) {
+      const contentStr = typeof file.content === 'string' ? file.content : '';
+      if (!contentStr || contentStr.trim().length === 0) {
+        console.warn(`[transfer-to-camunda] Skipping upload for ${file.name} due to empty content`);
+        uploadResults.failed.push({ name: file.name, error: 'Empty content' });
+        continue;
+      }
+
       let retries = 0;
       let success = false;
 
@@ -259,7 +266,7 @@ Deno.serve(async (req) => {
           const result = await camundaClient.uploadFile(
             project.id,
             file.name,
-            file.content,
+            contentStr,
             file.fileType,
             folder.id
           );

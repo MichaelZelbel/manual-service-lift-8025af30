@@ -204,44 +204,52 @@ export async function transferToCamunda({
 
     console.log('[transferToCamunda] Fetched subprocesses:', subprocesses?.length || 0);
 
-    // 3.1) Fix subprocess IDs and prepare BPMN XML
-    const subprocessBpmns = [];
-    for (const sub of subprocesses || []) {
-      // Use edited_bpmn_xml if available, otherwise use original_bpmn_xml
-      let xml = sub.edited_bpmn_xml || sub.original_bpmn_xml;
+  // 3.1) Fix subprocess IDs and prepare BPMN XML
+  const subprocessBpmns = [];
+  for (const sub of subprocesses || []) {
+    // Use edited_bpmn_xml if available, otherwise use original_bpmn_xml
+    let xml = sub.edited_bpmn_xml || sub.original_bpmn_xml;
 
-      if (!xml) {
-        console.warn(`[transferToCamunda] Subprocess ${sub.id} has no BPMN XML, skipping`);
-        continue;
-      }
-
-      // Create proper filename based on subprocess name and id
-      const sanitizedName = sub.name.replace(/[^a-zA-Z0-9-]/g, '-');
-      const filename = `subprocess-${sanitizedName}-${sub.id.substring(0, 8)}.bpmn`;
-
-      // Extract step_external_id - try to get it from MDS data
-      const { data: mdsMatch } = await supabase
-        .from('mds_data')
-        .select('step_external_id')
-        .eq('service_external_id', serviceId)
-        .eq('step_name', sub.name)
-        .single();
-
-      const stepExternalId = mdsMatch?.step_external_id;
-
-      if (stepExternalId && xml) {
-        // Fix subprocess process ID to match step external ID
-        xml = xml.replace(
-          /id="Process_[^"]+"/,
-          `id="Process_Sub_${stepExternalId}"`
-        );
-      }
-
-      subprocessBpmns.push({
-        filename,
-        xml,
-      });
+    if (!xml || (typeof xml === 'string' && xml.trim().length === 0)) {
+      console.warn(`[transferToCamunda] Subprocess ${sub.id} has empty BPMN XML, skipping`);
+      continue;
     }
+
+    // Create proper filename based on subprocess name and id (fallback to id if name missing)
+    const baseName = (sub.name || `sub-${String(sub.id).substring(0, 8)}`);
+    const sanitizedName = baseName
+      .replace(/[^a-zA-Z0-9-]/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '');
+    const filename = `subprocess-${sanitizedName}-${String(sub.id).substring(0, 8)}.bpmn`;
+
+    // Extract step_external_id - try to get it from MDS data
+    const { data: mdsMatch } = await supabase
+      .from('mds_data')
+      .select('step_external_id')
+      .eq('service_external_id', serviceId)
+      .eq('step_name', sub.name)
+      .maybeSingle();
+
+    const stepExternalId = mdsMatch?.step_external_id;
+
+    let xmlOut = xml;
+    if (stepExternalId && xmlOut) {
+      // Fix subprocess process ID to match step external ID
+      xmlOut = xmlOut.replace(
+        /id="Process_[^"]+"/,
+        `id="Process_Sub_${stepExternalId}"`
+      );
+    }
+
+    const trimmed = typeof xmlOut === 'string' ? xmlOut.trim() : xmlOut;
+    console.log(`[transferToCamunda] Prepared subprocess: ${filename} (chars: ${trimmed.length || 0})`);
+
+    subprocessBpmns.push({
+      filename,
+      xml: trimmed,
+    });
+  }
 
     // 4) Call the transfer-to-camunda edge function
     console.log('[transferToCamunda] Calling transfer-to-camunda edge function...');

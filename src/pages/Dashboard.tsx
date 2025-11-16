@@ -350,7 +350,7 @@ const Dashboard = () => {
                       size="sm"
                       disabled={modelerLoading}
                     >
-                      {modelerLoading ? "Loading..." : "Download for Camunda"}
+                      {modelerLoading ? "Loading..." : "Generate"}
                     </Button>
                     <Button
                       onClick={() => handleTransfer(service)}

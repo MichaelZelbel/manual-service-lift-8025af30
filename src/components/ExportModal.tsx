@@ -210,7 +210,7 @@ export function ExportModal({
                   Cancel
                 </Button>
                 <Button onClick={handleStartExport}>
-                  {type === "export" ? "Start Generation" : "Start Analysis"}
+                  {type === "export" ? "Start" : "Start Analysis"}
                 </Button>
               </div>
             </>

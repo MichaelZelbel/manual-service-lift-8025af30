@@ -204,14 +204,30 @@ export async function transferToCamunda({
 
     console.log('[transferToCamunda] Fetched subprocesses:', subprocesses?.length || 0);
 
-    // 3.1) Fix subprocess IDs
+    // 3.1) Fix subprocess IDs and prepare BPMN XML
     const subprocessBpmns = [];
     for (const sub of subprocesses || []) {
-      let xml = sub.bpmn_xml;
+      // Use edited_bpmn_xml if available, otherwise use original_bpmn_xml
+      let xml = sub.edited_bpmn_xml || sub.original_bpmn_xml;
 
-      // Extract step_external_id from filename or step_id
-      const match = sub.filename?.match(/subprocess-[^-]+-(.+)\.bpmn/);
-      const stepExternalId = match ? match[1] : null;
+      if (!xml) {
+        console.warn(`[transferToCamunda] Subprocess ${sub.id} has no BPMN XML, skipping`);
+        continue;
+      }
+
+      // Create proper filename based on subprocess name and id
+      const sanitizedName = sub.name.replace(/[^a-zA-Z0-9-]/g, '-');
+      const filename = `subprocess-${sanitizedName}-${sub.id.substring(0, 8)}.bpmn`;
+
+      // Extract step_external_id - try to get it from MDS data
+      const { data: mdsMatch } = await supabase
+        .from('mds_data')
+        .select('step_external_id')
+        .eq('service_external_id', serviceId)
+        .eq('step_name', sub.name)
+        .single();
+
+      const stepExternalId = mdsMatch?.step_external_id;
 
       if (stepExternalId && xml) {
         // Fix subprocess process ID to match step external ID
@@ -222,8 +238,8 @@ export async function transferToCamunda({
       }
 
       subprocessBpmns.push({
-        filename: sub.filename || `subprocess-${sub.id}.bpmn`,
-        xml: xml || '',
+        filename,
+        xml,
       });
     }
 

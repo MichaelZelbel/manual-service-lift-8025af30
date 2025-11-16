@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Download, Eye, FileText, Box, FileJson } from "lucide-react";
+import { Download, Eye, FileText, Box, FileJson, Upload } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { supabase } from "@/integrations/supabase/client";
@@ -22,9 +22,10 @@ interface ExportFile {
 interface ExportResultsPanelProps {
   serviceId: string;
   serviceName: string;
+  onTransferToCamunda?: () => void;
 }
 
-export function ExportResultsPanel({ serviceId, serviceName }: ExportResultsPanelProps) {
+export function ExportResultsPanel({ serviceId, serviceName, onTransferToCamunda }: ExportResultsPanelProps) {
   const [files, setFiles] = useState<ExportFile[]>([]);
   const [manifest, setManifest] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -186,10 +187,18 @@ export function ExportResultsPanel({ serviceId, serviceName }: ExportResultsPane
                 Generated one <strong>Manual Service BPMN</strong> (enriched), <strong>{subprocessBpmns.length} subprocess BPMNs</strong>, <strong>{forms.length} forms</strong> for the Manual Service, and a <strong>manifest</strong>. All files are packaged for Camunda import.
               </CardDescription>
             </div>
-            <Button onClick={handleDownloadZip} variant="outline">
-              <Download className="h-4 w-4 mr-2" />
-              Download ZIP
-            </Button>
+            <div className="flex gap-2">
+              {onTransferToCamunda && (
+                <Button onClick={onTransferToCamunda} variant="default">
+                  <Upload className="h-4 w-4 mr-2" />
+                  Camunda
+                </Button>
+              )}
+              <Button onClick={handleDownloadZip} variant="outline">
+                <Download className="h-4 w-4 mr-2" />
+                Download ZIP
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-6">

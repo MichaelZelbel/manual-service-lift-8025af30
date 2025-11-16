@@ -27,6 +27,7 @@ export default function ProcessEditor() {
   const navigate = useNavigate();
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [transferModalOpen, setTransferModalOpen] = useState(false);
+  const [autoStartTransfer, setAutoStartTransfer] = useState(false);
   const [checkModalOpen, setCheckModalOpen] = useState(false);
   const [checkLoading, setCheckLoading] = useState(false);
   const [checkAssessment, setCheckAssessment] = useState<string | null>(null);
@@ -276,14 +277,23 @@ export default function ProcessEditor() {
           serviceId={id!}
           serviceName={processName || `Service ${id}`}
           bpmnModeler={bpmn.modeler}
+          onTransferToCamunda={() => {
+            setExportModalOpen(false);
+            setAutoStartTransfer(true);
+            setTransferModalOpen(true);
+          }}
         />
 
         <TransferToCamundaModal
           open={transferModalOpen}
-          onOpenChange={setTransferModalOpen}
+          onOpenChange={(open) => {
+            setTransferModalOpen(open);
+            if (!open) setAutoStartTransfer(false);
+          }}
           serviceId={id!}
           serviceName={processName || `Service ${id}`}
           bpmnModeler={bpmn.modeler}
+          autoStart={autoStartTransfer}
         />
 
         <BpmnCheckModal

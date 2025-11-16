@@ -20,6 +20,7 @@ interface ExportModalProps {
   serviceId: string;
   serviceName: string;
   bpmnModeler?: any; // bpmn-js Modeler instance (required for export)
+  onTransferToCamunda?: () => void;
 }
 
 const PROGRESS_STEPS = {
@@ -45,6 +46,7 @@ export function ExportModal({
   serviceId,
   serviceName,
   bpmnModeler,
+  onTransferToCamunda,
 }: ExportModalProps) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -263,6 +265,7 @@ export function ExportModal({
                 <ExportResultsPanel 
                   serviceId={serviceId}
                   serviceName={serviceName}
+                  onTransferToCamunda={onTransferToCamunda}
                 />
               </ScrollArea>
               <div className="flex justify-end gap-3 pt-4">

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -17,6 +17,7 @@ interface TransferToCamundaModalProps {
   serviceId: string;
   serviceName: string;
   bpmnModeler?: any;
+  autoStart?: boolean;
 }
 
 interface TransferResult {
@@ -48,12 +49,20 @@ export function TransferToCamundaModal({
   serviceId,
   serviceName,
   bpmnModeler,
+  autoStart = false,
 }: TransferToCamundaModalProps) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
   const [currentStep, setCurrentStep] = useState("");
   const [isComplete, setIsComplete] = useState(false);
   const [transferResult, setTransferResult] = useState<TransferResult | null>(null);
+
+  // Auto-start transfer when modal opens with autoStart=true
+  useEffect(() => {
+    if (open && autoStart && !isProcessing && !isComplete) {
+      handleStartTransfer();
+    }
+  }, [open, autoStart]);
 
   const handleClose = () => {
     if (!isProcessing) {

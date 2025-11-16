@@ -170,7 +170,7 @@ export function ExportModal({
       <DialogContent className={showResults ? "sm:max-w-[900px]" : "sm:max-w-[520px]"}>
         <DialogHeader>
           <DialogTitle>
-            {type === "export" ? "Export Options" : "Run Backend Analysis"}
+            {type === "export" ? "Generation" : "Run Backend Analysis"}
           </DialogTitle>
           <DialogDescription>
             {type === "export"

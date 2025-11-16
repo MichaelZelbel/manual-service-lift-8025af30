@@ -241,7 +241,7 @@ export default function ProcessEditor() {
             </Button>
             <Button variant="default" size="sm" onClick={() => setTransferModalOpen(true)} className="gap-2">
               <Upload className="h-4 w-4" />
-              Transfer to Camunda
+              Camunda
             </Button>
           </div>
         </div>

@@ -114,8 +114,8 @@ class CamundaClient {
 
   async searchProjects(name?: string) {
     console.log(`[CamundaClient] Searching projects...`);
-    const params = name ? `?filter=${encodeURIComponent(name)}` : '';
-    const result = await this.apiRequest('GET', `/projects${params}`);
+    const body = name ? { filter: { name } } : {};
+    const result = await this.apiRequest('POST', '/projects/search', body);
     console.log(`[CamundaClient] Found ${result.items?.length || 0} projects`);
     return result.items || [];
   }

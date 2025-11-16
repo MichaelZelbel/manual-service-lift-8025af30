@@ -187,14 +187,14 @@ export function ExportResultsPanel({ serviceId, serviceName, onTransferToCamunda
                 Generated one <strong>Manual Service BPMN</strong> (enriched), <strong>{subprocessBpmns.length} subprocess BPMNs</strong>, <strong>{forms.length} forms</strong> for the Manual Service, and a <strong>manifest</strong>. All files are packaged for Camunda import.
               </CardDescription>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-col gap-2">
               {onTransferToCamunda && (
-                <Button onClick={onTransferToCamunda} variant="default">
+                <Button onClick={onTransferToCamunda} variant="outline" className="w-full">
                   <Upload className="h-4 w-4 mr-2" />
                   Camunda
                 </Button>
               )}
-              <Button onClick={handleDownloadZip} variant="outline">
+              <Button onClick={handleDownloadZip} variant="outline" className="w-full">
                 <Download className="h-4 w-4 mr-2" />
                 Download ZIP
               </Button>

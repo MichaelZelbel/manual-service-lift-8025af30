@@ -112,6 +112,14 @@ class CamundaClient {
     return response.json();
   }
 
+  async searchProjects(name?: string) {
+    console.log(`[CamundaClient] Searching projects...`);
+    const params = name ? `?filter=${encodeURIComponent(name)}` : '';
+    const result = await this.apiRequest('GET', `/projects${params}`);
+    console.log(`[CamundaClient] Found ${result.items?.length || 0} projects`);
+    return result.items || [];
+  }
+
   async createProject(name: string) {
     console.log(`[CamundaClient] Creating project: ${name}`);
     const project = await this.apiRequest('POST', '/projects', { name });
@@ -119,13 +127,25 @@ class CamundaClient {
     return project;
   }
 
-  async uploadFile(projectId: string, name: string, content: string, fileType: string) {
+  async createFolder(projectId: string, name: string, parentId?: string) {
+    console.log(`[CamundaClient] Creating folder: ${name}`);
+    const folder = await this.apiRequest('POST', '/folders', {
+      projectId,
+      name,
+      parentId,
+    });
+    console.log(`[CamundaClient] Folder created: ${folder.name} (ID: ${folder.id})`);
+    return folder;
+  }
+
+  async uploadFile(projectId: string, name: string, content: string, fileType: string, folderId?: string) {
     console.log(`[CamundaClient] Uploading file: ${name} (type: ${fileType})`);
     const file = await this.apiRequest('POST', '/files', {
       projectId,
       name,
       content,
       fileType,
+      ...(folderId && { folderId }),
     });
     console.log(`[CamundaClient] File uploaded: ${file.name} (ID: ${file.id})`);
     return file;
@@ -133,6 +153,10 @@ class CamundaClient {
 
   getProjectUrl(projectId: string) {
     return `https://modeler.camunda.io/projects/${projectId}`;
+  }
+
+  getFolderUrl(projectId: string, folderId: string) {
+    return `https://modeler.camunda.io/projects/${projectId}/folder/${folderId}`;
   }
 }
 
@@ -166,12 +190,26 @@ Deno.serve(async (req) => {
       modelerApiUrl: Deno.env.get('CAMUNDA_MODELER_API_URL')!,
     });
 
-    // Create project with unique name (service name + timestamp)
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('.')[0];
-    const projectName = `${serviceName}_${timestamp}`;
+    // Use existing project or create new one
+    const targetProjectName = Deno.env.get('CAMUNDA_TARGET_PROJECT_NAME') || 'DemoProject';
+    console.log(`[transfer-to-camunda] Looking for project: ${targetProjectName}`);
 
-    console.log(`[transfer-to-camunda] Creating Camunda project: ${projectName}`);
-    const project = await camundaClient.createProject(projectName);
+    const projects = await camundaClient.searchProjects(targetProjectName);
+    let project = projects.find((p: any) => p.name === targetProjectName);
+
+    if (!project) {
+      console.log(`[transfer-to-camunda] Project "${targetProjectName}" not found, creating it...`);
+      project = await camundaClient.createProject(targetProjectName);
+    } else {
+      console.log(`[transfer-to-camunda] Using existing project: ${project.name} (ID: ${project.id})`);
+    }
+
+    // Create a folder for this service within the project
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('.')[0];
+    const folderName = `${serviceName}_${timestamp}`;
+
+    console.log(`[transfer-to-camunda] Creating folder: ${folderName}`);
+    const folder = await camundaClient.createFolder(project.id, folderName);
 
     // Prepare files to upload (exclude manifest)
     const filesToUpload = [];
@@ -222,7 +260,8 @@ Deno.serve(async (req) => {
             project.id,
             file.name,
             file.content,
-            file.fileType
+            file.fileType,
+            folder.id
           );
 
           uploadResults.successful.push({
@@ -257,9 +296,12 @@ Deno.serve(async (req) => {
       }
     }
 
+    const folderUrl = camundaClient.getFolderUrl(project.id, folder.id);
     const projectUrl = camundaClient.getProjectUrl(project.id);
 
     console.log(`[transfer-to-camunda] Transfer completed`);
+    console.log(`[transfer-to-camunda] Project: ${project.name} (${project.id})`);
+    console.log(`[transfer-to-camunda] Folder: ${folder.name} (${folder.id})`);
     console.log(`[transfer-to-camunda] Successful uploads: ${uploadResults.successful.length}`);
     console.log(`[transfer-to-camunda] Failed uploads: ${uploadResults.failed.length}`);
 
@@ -284,6 +326,9 @@ Deno.serve(async (req) => {
         projectId: project.id,
         projectName: project.name,
         projectUrl,
+        folderId: folder.id,
+        folderName: folder.name,
+        folderUrl,
         filesUploaded: uploadResults.successful.length,
         filesFailed: uploadResults.failed.length,
         uploadDetails: {
@@ -291,8 +336,8 @@ Deno.serve(async (req) => {
           failed: uploadResults.failed,
         },
         message: success
-          ? `Successfully transferred ${uploadResults.successful.length} files to Camunda`
-          : `Transferred ${uploadResults.successful.length} files, ${uploadResults.failed.length} failed`,
+          ? `Successfully transferred ${uploadResults.successful.length} files to ${project.name}/${folder.name}`
+          : `Transferred ${uploadResults.successful.length} files to ${project.name}/${folder.name}, ${uploadResults.failed.length} failed`,
       }),
       {
         status: success ? 200 : 207, // 207 Multi-Status for partial success

@@ -8,6 +8,7 @@ import { BpmnListEditor } from "@/components/BpmnListEditor";
 import { SubprocessList } from "@/components/SubprocessList";
 import { ExportModal } from "@/components/ExportModal";
 import { BpmnCheckModal } from "@/components/BpmnCheckModal";
+import { TransferToCamundaModal } from "@/components/TransferToCamundaModal";
 import { useBpmnModeler } from "@/hooks/useBpmnModeler";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -25,6 +26,7 @@ export default function ProcessEditor() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [transferModalOpen, setTransferModalOpen] = useState(false);
   const [checkModalOpen, setCheckModalOpen] = useState(false);
   const [checkLoading, setCheckLoading] = useState(false);
   const [checkAssessment, setCheckAssessment] = useState<string | null>(null);
@@ -237,6 +239,10 @@ export default function ProcessEditor() {
               <FileDown className="h-4 w-4 mr-2" />
               Download for Camunda
             </Button>
+            <Button variant="default" size="sm" onClick={() => setTransferModalOpen(true)} className="gap-2">
+              <Upload className="h-4 w-4" />
+              Transfer to Camunda
+            </Button>
           </div>
         </div>
 
@@ -267,6 +273,14 @@ export default function ProcessEditor() {
           open={exportModalOpen}
           onOpenChange={setExportModalOpen}
           type="export"
+          serviceId={id!}
+          serviceName={processName || `Service ${id}`}
+          bpmnModeler={bpmn.modeler}
+        />
+
+        <TransferToCamundaModal
+          open={transferModalOpen}
+          onOpenChange={setTransferModalOpen}
           serviceId={id!}
           serviceName={processName || `Service ${id}`}
           bpmnModeler={bpmn.modeler}

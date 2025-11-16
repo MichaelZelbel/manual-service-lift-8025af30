@@ -218,6 +218,7 @@ export type Database = {
           id: string
           last_analysis: string | null
           last_bpmn_export: string | null
+          last_camunda_transfer: string | null
           last_edited: string
           last_form_export: string | null
           name: string
@@ -231,6 +232,7 @@ export type Database = {
           id?: string
           last_analysis?: string | null
           last_bpmn_export?: string | null
+          last_camunda_transfer?: string | null
           last_edited?: string
           last_form_export?: string | null
           name: string
@@ -244,6 +246,7 @@ export type Database = {
           id?: string
           last_analysis?: string | null
           last_bpmn_export?: string | null
+          last_camunda_transfer?: string | null
           last_edited?: string
           last_form_export?: string | null
           name?: string

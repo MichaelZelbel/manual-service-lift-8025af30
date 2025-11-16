@@ -120,6 +120,8 @@ export function TransferToCamundaModal({
           `Transfer partially complete: ${result.filesUploaded} succeeded, ${result.filesFailed} failed`
         );
       }
+      
+      setIsProcessing(false);
     } catch (error) {
       console.error("Transfer error:", error);
       

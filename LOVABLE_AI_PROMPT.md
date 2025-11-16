@@ -140,11 +140,9 @@ const handleStartTransfer = async () => {
 )}
 ```
 
-### Step 2: Add Button to ProcessEditor Page
+### Step 2: Add Button in the Model that shows the files after the user clicked "Download to Camunda" 
 
-In `src/pages/ProcessEditor.tsx`, find the "Download for Camunda" button section (around line 236-239).
-
-Add the new "Transfer to Camunda" button next to it:
+Add the new "Transfer to Camunda" button:
 
 ```jsx
 import { useState } from "react";
@@ -179,49 +177,8 @@ const [showTransferModal, setShowTransferModal] = useState(false);
 import { Upload } from "lucide-react";
 ```
 
-### Step 3: Add Button to Dashboard Page
+### Step 3: This step got removed - please ignore
 
-In `src/pages/Dashboard.tsx`, find the "Download for Camunda" button (around line 305-313).
-
-Add similar functionality:
-
-```jsx
-import { TransferToCamundaModal } from "@/components/TransferToCamundaModal";
-
-// Inside the component, add state:
-const [showTransferModal, setShowTransferModal] = useState(false);
-const [transferService, setTransferService] = useState(null);
-
-// Create handler:
-const handleTransferClick = async (service) => {
-  // Initialize hidden modeler for this service
-  const modeler = await getExportModeler(service.bpmn_xml);
-  setTransferService({ ...service, modeler });
-  setShowTransferModal(true);
-};
-
-// In the JSX, add button to the service card actions:
-<Button
-  variant="outline"
-  size="sm"
-  onClick={() => handleTransferClick(service)}
-  className="gap-2"
->
-  <Upload className="h-4 w-4" />
-  Transfer to Camunda
-</Button>
-
-{/* Add the modal */}
-{transferService && (
-  <TransferToCamundaModal
-    open={showTransferModal}
-    onOpenChange={setShowTransferModal}
-    serviceId={transferService.id}
-    serviceName={transferService.name}
-    bpmnModeler={transferService.modeler}
-  />
-)}
-```
 
 ### Step 4: TypeScript Interfaces
 

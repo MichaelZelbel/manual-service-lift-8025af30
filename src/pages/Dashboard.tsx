@@ -363,14 +363,6 @@ const Dashboard = () => {
                       Camunda
                     </Button>
                     <Button
-                      onClick={() => handleAnalysis(service)}
-                      variant="secondary"
-                      className="w-full"
-                      size="sm"
-                    >
-                      Backend Analysis
-                    </Button>
-                    <Button
                       onClick={() => navigate(`/analysis/${service.id}`)}
                       variant="secondary"
                       className="w-full"

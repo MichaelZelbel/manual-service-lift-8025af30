@@ -45,7 +45,7 @@ export function BpmnCheckModal({
           
           {assessment && !loading && (
             <ScrollArea className="h-full pr-4">
-              <div className="prose prose-sm max-w-none dark:prose-invert">
+              <div className="prose prose-sm max-w-none dark:prose-invert text-foreground">
                 <ReactMarkdown>{assessment}</ReactMarkdown>
               </div>
             </ScrollArea>

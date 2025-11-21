@@ -32,7 +32,7 @@ export default function ProcessEditor() {
   const [checkLoading, setCheckLoading] = useState(false);
   const [checkAssessment, setCheckAssessment] = useState<string | null>(null);
   const [checkError, setCheckError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState("list");
+  const [activeTab, setActiveTab] = useState("graphical");
   const [processName, setProcessName] = useState<string>("");
 
   const bpmn = useBpmnModeler({

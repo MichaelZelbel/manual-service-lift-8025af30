@@ -127,6 +127,22 @@ class CamundaClient {
     return project;
   }
 
+  async searchFolders(projectId: string, name?: string, parentId?: string) {
+    console.log(`[CamundaClient] Searching folders in project ${projectId}...`);
+    const body: any = { 
+      filter: { projectId },
+    };
+    if (name) {
+      body.filter.name = name;
+    }
+    if (parentId) {
+      body.filter.parentId = parentId;
+    }
+    const result = await this.apiRequest('POST', '/folders/search', body);
+    console.log(`[CamundaClient] Found ${result.items?.length || 0} folders`);
+    return result.items || [];
+  }
+
   async createFolder(projectId: string, name: string, parentId?: string) {
     console.log(`[CamundaClient] Creating folder: ${name}`);
     const folder = await this.apiRequest('POST', '/folders', {
@@ -211,8 +227,18 @@ Deno.serve(async (req) => {
     //      └─ Low Level (subprocess BPMNs)
     
     const mainFolderName = `${serviceName} ${serviceId}`;
-    console.log(`[transfer-to-camunda] Creating/finding main folder: ${mainFolderName}`);
-    const mainFolder = await camundaClient.createFolder(project.id, mainFolderName);
+    console.log(`[transfer-to-camunda] Looking for existing main folder: ${mainFolderName}`);
+    
+    // Search for existing main folder
+    const existingFolders = await camundaClient.searchFolders(project.id, mainFolderName);
+    let mainFolder = existingFolders.find((f: any) => f.name === mainFolderName && !f.parentId);
+    
+    if (!mainFolder) {
+      console.log(`[transfer-to-camunda] Main folder not found, creating it...`);
+      mainFolder = await camundaClient.createFolder(project.id, mainFolderName);
+    } else {
+      console.log(`[transfer-to-camunda] Using existing main folder: ${mainFolder.name} (ID: ${mainFolder.id})`);
+    }
 
     const now = new Date();
     const timestamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;

@@ -205,20 +205,25 @@ Deno.serve(async (req) => {
     }
 
     // Create folder structure:
-    // Main folder: [Manual Service Name] [Manual Service ID] [Timestamp]
-    //   ├─ High Level (main BPMN + forms)
-    //   └─ Low Level (subprocess BPMNs)
+    // Main folder: [Manual Service Name] [Manual Service ID]
+    //   └─ Export folder: [Manual Service Name] [Timestamp]
+    //      ├─ High Level (main BPMN + forms)
+    //      └─ Low Level (subprocess BPMNs)
     
-    const now = new Date();
-    const timestamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
-    const mainFolderName = `${serviceName} ${serviceId} ${timestamp}`;
-    
-    console.log(`[transfer-to-camunda] Creating main folder: ${mainFolderName}`);
+    const mainFolderName = `${serviceName} ${serviceId}`;
+    console.log(`[transfer-to-camunda] Creating/finding main folder: ${mainFolderName}`);
     const mainFolder = await camundaClient.createFolder(project.id, mainFolderName);
 
+    const now = new Date();
+    const timestamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
+    const exportFolderName = `${serviceName} ${timestamp}`;
+    
+    console.log(`[transfer-to-camunda] Creating export folder: ${exportFolderName}`);
+    const exportFolder = await camundaClient.createFolder(project.id, exportFolderName, mainFolder.id);
+
     console.log(`[transfer-to-camunda] Creating High Level and Low Level subfolders`);
-    const highLevelFolder = await camundaClient.createFolder(project.id, 'High Level', mainFolder.id);
-    const lowLevelFolder = await camundaClient.createFolder(project.id, 'Low Level', mainFolder.id);
+    const highLevelFolder = await camundaClient.createFolder(project.id, 'High Level', exportFolder.id);
+    const lowLevelFolder = await camundaClient.createFolder(project.id, 'Low Level', exportFolder.id);
 
     // Prepare files to upload to High Level folder (main BPMN + forms)
     const highLevelFiles = [];
@@ -319,12 +324,13 @@ Deno.serve(async (req) => {
       }
     }
 
-    const mainFolderUrl = camundaClient.getFolderUrl(project.id, mainFolder.id);
+    const exportFolderUrl = camundaClient.getFolderUrl(project.id, exportFolder.id);
     const projectUrl = camundaClient.getProjectUrl(project.id);
 
     console.log(`[transfer-to-camunda] Transfer completed`);
     console.log(`[transfer-to-camunda] Project: ${project.name} (${project.id})`);
     console.log(`[transfer-to-camunda] Main folder: ${mainFolder.name} (${mainFolder.id})`);
+    console.log(`[transfer-to-camunda] Export folder: ${exportFolder.name} (${exportFolder.id})`);
     console.log(`[transfer-to-camunda] High Level files: ${highLevelFiles.length}`);
     console.log(`[transfer-to-camunda] Low Level files: ${lowLevelFiles.length}`);
     console.log(`[transfer-to-camunda] Successful uploads: ${uploadResults.successful.length}`);
@@ -353,7 +359,9 @@ Deno.serve(async (req) => {
         projectUrl,
         mainFolderId: mainFolder.id,
         mainFolderName: mainFolder.name,
-        mainFolderUrl,
+        exportFolderId: exportFolder.id,
+        exportFolderName: exportFolder.name,
+        exportFolderUrl,
         highLevelFolderId: highLevelFolder.id,
         lowLevelFolderId: lowLevelFolder.id,
         filesUploaded: uploadResults.successful.length,
@@ -363,8 +371,8 @@ Deno.serve(async (req) => {
           failed: uploadResults.failed,
         },
         message: success
-          ? `Successfully transferred ${uploadResults.successful.length} files to ${project.name}/${mainFolder.name}`
-          : `Transferred ${uploadResults.successful.length} files to ${project.name}/${mainFolder.name}, ${uploadResults.failed.length} failed`,
+          ? `Successfully transferred ${uploadResults.successful.length} files to ${project.name}/${mainFolder.name}/${exportFolder.name}`
+          : `Transferred ${uploadResults.successful.length} files to ${project.name}/${mainFolder.name}/${exportFolder.name}, ${uploadResults.failed.length} failed`,
       }),
       {
         status: success ? 200 : 207, // 207 Multi-Status for partial success

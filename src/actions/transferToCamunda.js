@@ -121,9 +121,14 @@ export async function transferToCamunda({
     );
     console.log('[transferToCamunda] Service-wide refs prepared:', allServiceRefs.length);
 
+    // 1.6) Fetch service description for use in start form
+    const serviceDescription = await fetchServiceDescription(String(serviceId));
+    console.log('[transferToCamunda] Service description:', serviceDescription);
+
     // 2) Generate enriched main BPMN + forms
     const { updatedBpmnXml, forms, manifest } = await generateBundle({
       serviceName,
+      serviceDescription,
       bpmnModeler: modeler,
       templates,
       resolveDescriptions: async (node) => {
